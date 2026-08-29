@@ -1,0 +1,16 @@
+# temporal folders
+build/
+tmp/
+scratch/
+
+# temproral files
+todo.txt
+
+# python folders and files
+__pycache__/
+venv/
+.venv/
+*.pyc
+*.pyo
+*.pyd
+*.so
