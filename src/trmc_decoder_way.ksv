@@ -1,0 +1,530 @@
+//
+// This file is a part of Terem Core project (https://github.com/BIG-Denis/terem-core).
+// This file generated via KaravaiSV templating engine (https://github.com/BIG-Denis/karavaisv).
+//
+// @author: BIG-Denis (https://github.com/BIG-Denis)
+// @description: One way for decoder which decodes one instruction per cycle
+//
+
+module </ module_id />_decoder_way
+import </ module_id />_pkg::*;
+(
+  input  logic [LONG_INSTR_WIDTH - 1:0] instr_i,
+  input  logic                          predict_taken_i,
+
+  output dec_ctrls_t                    dec_ctrls_o,
+  output arch_regs_t                    arch_regs_o,
+  output logic                          illegal_instr_o
+);
+
+//////////////////////// INTERNAL CONSTANTS DECLARATION ///////////////////////
+
+localparam int unsigned COMPR_INSTR_OPCODE_WIDTH = 2;
+localparam int unsigned LONG_INSTR_OPCODE_WIDTH  = 5;
+
+localparam int unsigned FUNC3_WIDTH              = 3;
+localparam int unsigned FUNC7_WIDTH              = 7;
+
+localparam int unsigned IMM_I_BASE_WIDTH         = 12;
+localparam int unsigned IMM_S_BASE_WIDTH         = 12;
+localparam int unsigned IMM_B_BASE_WIDTH         = 12;
+localparam int unsigned IMM_U_BASE_WIDTH         = 20;
+localparam int unsigned IMM_J_BASE_WIDTH         = 20;
+localparam int unsigned SHAMT_BASE_WIDTH         = 5;
+
+
+///////////////////////// INTERNAL SIGNALS DECLARATION ////////////////////////
+
+// architectural fields
+
+logic [COMPR_INSTR_OPCODE_WIDTH - 1:0] compressed_instr_opcode;
+logic [ LONG_INSTR_OPCODE_WIDTH - 1:0] long_instr_opcode;
+
+logic [IMM_I_BASE_WIDTH - 1:0]         imm_i_base;
+logic [IMM_S_BASE_WIDTH - 1:0]         imm_s_base;
+logic [IMM_B_BASE_WIDTH - 1:0]         imm_b_base;
+logic [IMM_U_BASE_WIDTH - 1:0]         imm_u_base;
+logic [IMM_J_BASE_WIDTH - 1:0]         imm_j_base;
+logic [SHAMT_BASE_WIDTH - 1:0]         shamt_base;
+
+logic [DATA_WIDTH - 1:0]               imm_i;
+logic [DATA_WIDTH - 1:0]               imm_s;
+logic [DATA_WIDTH - 1:0]               imm_b;
+logic [DATA_WIDTH - 1:0]               imm_u;
+logic [DATA_WIDTH - 1:0]               imm_j;
+logic [DATA_WIDTH - 1:0]               shamt;
+
+logic [FUNC3_WIDTH - 1:0]              func3;
+logic [FUNC7_WIDTH - 1:0]              func7;
+
+logic [ARCH_REG_ADDR_WIDTH - 1:0]      arch_rd;
+logic [ARCH_REG_ADDR_WIDTH - 1:0]      arch_rs1;
+logic [ARCH_REG_ADDR_WIDTH - 1:0]      arch_rs2;
+
+
+// internal usage
+
+dec_ctrls_t                            dec_ctrls;
+arch_regs_t                            arch_regs;
+
+logic                                  illegal_instr;
+
+
+///////////////////////// INTERNAL SIGNALS ASSIGNMENT /////////////////////////
+
+// architectural fields
+
+assign compressed_instr_opcode = instr_i[1:0];
+assign long_instr_opcode       = instr_i[6:2];
+
+assign imm_i_base              = instr_i[31:20];
+assign imm_s_base              = {instr_i[31:25], instr_i[11:7]};
+assign imm_b_base              = {instr_i[31], instr_i[7], instr_i[30:25], instr_i[11:8]};
+assign imm_u_base              = instr_i[31:12];
+assign imm_j_base              = {instr_i[31], instr_i[19:12], instr_i[20], instr_i[30:21]};
+assign shamt_base              = instr_i[24:20];
+
+assign imm_i                   = {{20{imm_i_base[11]}}, imm_i_base};
+assign imm_s                   = {{20{imm_s_base[11]}}, imm_s_base};
+assign imm_b                   = {{19{imm_b_base[11]}}, imm_b_base, 1'b0};
+assign imm_u                   = {imm_u_base, 12'b0};
+assign imm_j                   = {{11{imm_j_base[11]}}, imm_j_base, 1'b0};
+assign shamt                   = {27'b0, shamt_base};
+
+assign func3                   = instr_i[14:12];
+assign func7                   = instr_i[31:25];
+
+assign arch_rs1                = instr_i[19:15];
+assign arch_rs2                = instr_i[24:20];
+assign arch_rd                 = instr_i[11:7];
+
+
+////////////////////////////// INSTRUCTION DECODE /////////////////////////////
+
+always_comb begin
+
+  dec_ctrls                   = dec_ctrls_t'('x);  // default x'ing all fields
+  arch_regs                   = arch_regs_t'('x);
+  arch_regs.rd_need           = 1'b0;
+
+  if (compressed_instr_opcode == 'b11) begin  // long instructions
+
+    case (long_instr_opcode)
+      5'b01100: begin  // R-type
+
+        dec_ctrls.pe_type                      = INT_ALU;
+        dec_ctrls.pe_ctrls.int_alu.alu_op2_sel = RS2;
+
+        arch_regs.rs1_addr                     = arch_rs1;
+        arch_regs.rs2_addr                     = arch_rs2;
+        arch_regs.rd_addr                      = arch_rd;
+        arch_regs.rd_need                      = |arch_rd;
+
+        case(func3)
+          3'h0: begin  // add/sub
+            case (func7)
+              7'h00: begin
+                dec_ctrls.pe_ctrls.int_alu.alu_opcode = ADD;
+                illegal_instr                         = 1'b0;
+              end
+              7'h20: begin
+                dec_ctrls.pe_ctrls.int_alu.alu_opcode = SUB;
+                illegal_instr                         = 1'b0;
+              end
+              default: begin
+                illegal_instr                         = 1'b1;
+              end
+            endcase
+          end
+          3'h1: begin  // sll
+            if (func7 == 7'h00) begin
+              dec_ctrls.pe_ctrls.int_alu.alu_opcode = SLL;
+              illegal_instr                         = 1'b0;
+            end
+            else begin
+              illegal_instr                         = 1'b1;
+            end
+          end
+          3'h2: begin  // slts
+            if (func7 == 7'h00) begin
+              dec_ctrls.pe_ctrls.int_alu.alu_opcode = SLTS;
+              illegal_instr                         = 1'b0;
+            end
+            else begin
+              illegal_instr                         = 1'b1;
+            end
+          end
+          3'h3: begin  // sltu
+            if (func7 == 7'h00) begin
+              dec_ctrls.pe_ctrls.int_alu.alu_opcode = SLTU;
+              illegal_instr                         = 1'b0;
+            end
+            else begin
+              illegal_instr                         = 1'b1;
+            end
+          end
+          3'h4: begin  // xor
+            if (func7 == 7'h00) begin
+              dec_ctrls.pe_ctrls.int_alu.alu_opcode = XOR;
+              illegal_instr                         = 1'b0;
+            end
+            else begin
+              illegal_instr                         = 1'b1;
+            end
+          end
+          3'h5: begin  // srl/sra
+            case (func7)
+              7'h00: begin
+                dec_ctrls.pe_ctrls.int_alu.alu_opcode = SRL;
+                illegal_instr                         = 1'b0;
+              end
+              7'h20: begin
+                dec_ctrls.pe_ctrls.int_alu.alu_opcode = SRA;
+                illegal_instr                         = 1'b0;
+              end
+              default: begin
+                illegal_instr                         = 1'b1;
+              end
+            endcase
+          end
+          3'h6: begin  // or
+            if (func7 == 7'h00) begin
+              dec_ctrls.pe_ctrls.int_alu.alu_opcode = OR;
+              illegal_instr                         = 1'b0;
+            end
+            else begin
+              illegal_instr                         = 1'b1;
+            end
+          end
+          3'h7: begin  // and
+            if (func7 == 7'h00) begin
+              dec_ctrls.pe_ctrls.int_alu.alu_opcode = AND;
+              illegal_instr                         = 1'b0;
+            end
+            else begin
+              illegal_instr                         = 1'b1;
+            end
+          end
+          default: begin  // wrong func3
+            illegal_instr                           = 1'b1;
+          end
+        endcase
+
+      end
+
+      5'b00100: begin  // I-type
+
+        dec_ctrls.pe_type                      = INT_ALU;
+        dec_ctrls.pe_ctrls.int_alu.alu_op2_sel = SHAMT_OR_IMM;
+
+        arch_regs.rs1_addr                     = arch_rs1;
+        arch_regs.rs2_addr                     = ARCH_REG_ADDR_WIDTH'('0);  // not used
+        arch_regs.rd_addr                      = arch_rd;
+        arch_regs.rd_need                      = |arch_rd;
+
+        dec_ctrls.pe_ctrls.imm                 = func3 inside {3'h1, 3'h5} ? shamt : imm_i;
+
+        case (func3)
+          3'h0: begin  // add
+            dec_ctrls.pe_ctrls.int_alu.alu_opcode = ADD;
+            illegal_instr                         = 1'b0;
+          end
+          3'h1: begin  // sll
+            if (func7 == 7'h00) begin
+              dec_ctrls.pe_ctrls.int_alu.alu_opcode = SLL;
+              illegal_instr                         = 1'b0;
+            end
+            else begin
+              illegal_instr                         = 1'b1;
+            end
+          end
+          3'h2: begin  // slt
+            dec_ctrls.pe_ctrls.int_alu.alu_opcode = SLTS;
+            illegal_instr                         = 1'b0;
+          end
+          3'h3: begin  // sltu
+            dec_ctrls.pe_ctrls.int_alu.alu_opcode = SLTU;
+            illegal_instr                         = 1'b0;
+          end
+          3'h4: begin  // xor
+            dec_ctrls.pe_ctrls.int_alu.alu_opcode = XOR;
+            illegal_instr                         = 1'b0;
+          end
+          3'h5: begin  // srl/sra
+            case (func7)
+              7'h00: begin
+                dec_ctrls.pe_ctrls.int_alu.alu_opcode = SRL;
+                illegal_instr                         = 1'b0;
+              end
+              7'h20: begin
+                dec_ctrls.pe_ctrls.int_alu.alu_opcode = SRA;
+                illegal_instr                         = 1'b0;
+              end
+              default: begin
+                illegal_instr                         = 1'b1;
+              end
+            endcase
+          end
+          3'h6: begin  // or
+            dec_ctrls.pe_ctrls.int_alu.alu_opcode = OR;
+            illegal_instr                         = 1'b0;
+          end
+          3'h7: begin  // and
+            dec_ctrls.pe_ctrls.int_alu.alu_opcode = AND;
+            illegal_instr                         = 1'b0;
+          end
+          default: begin  // wrong func3
+            illegal_instr                         = 1'b1;
+          end
+        endcase
+
+      end
+
+      5'b00000: begin  // Load
+
+        dec_ctrls.pe_type              = DMEM_LOAD;
+        dec_ctrls.pe_ctrls.imm         = imm_i;
+
+        arch_regs.rs1_addr             = arch_rs1;
+        arch_regs.rs2_addr             = ARCH_REG_ADDR_WIDTH'('0);  // not used
+        arch_regs.rd_addr              = arch_rd;
+        arch_regs.rd_need              = |arch_rd;
+
+        case (func3)
+          3'h0: begin
+            dec_ctrls.pe_ctrls.dmem.word_pt = BYTE_S;
+            illegal_instr                   = 1'b0;
+          end
+          3'h1: begin
+            dec_ctrls.pe_ctrls.dmem.word_pt = HALF_S;
+            illegal_instr                   = 1'b0;
+          end
+          3'h2: begin
+            dec_ctrls.pe_ctrls.dmem.word_pt = WORD;
+            illegal_instr                   = 1'b0;
+          end
+          3'h4: begin
+            dec_ctrls.pe_ctrls.dmem.word_pt = BYTE_U;
+            illegal_instr                   = 1'b0;
+          end
+          3'h5: begin
+            dec_ctrls.pe_ctrls.dmem.word_pt = HALF_U;
+            illegal_instr                   = 1'b0;
+          end
+          default: begin
+            illegal_instr                   = 1'b1;
+          end
+        endcase
+
+      end
+
+      5'b01000: begin  // Store
+
+        dec_ctrls.pe_type              = DMEM_STORE;
+        dec_ctrls.pe_ctrls.imm         = imm_s;
+
+        arch_regs.rs1_addr             = arch_rs1;
+        arch_regs.rs2_addr             = arch_rs2;
+        arch_regs.rd_addr              = ARCH_REG_ADDR_WIDTH'('0);  // not used
+        arch_regs.rd_need              = 1'b0;
+
+        case (func3)
+          3'h0: begin
+            dec_ctrls.pe_ctrls.dmem.word_pt = WORD;
+            illegal_instr                   = 1'b0;
+          end
+          3'h1: begin
+            dec_ctrls.pe_ctrls.dmem.word_pt = HALF_U;
+            illegal_instr                   = 1'b0;
+          end
+          3'h2: begin
+            dec_ctrls.pe_ctrls.dmem.word_pt = BYTE_U;
+            illegal_instr                   = 1'b0;
+          end
+          default: begin
+            illegal_instr                   = 1'b1;
+          end
+        endcase
+
+      end
+
+      5'b11000: begin  // Branch
+
+        dec_ctrls.pe_type                       = BJ_ALU;
+        dec_ctrls.pe_ctrls.bj_alu.instr_type    = BRANCH;
+        dec_ctrls.pe_ctrls.imm                  = imm_b;
+        dec_ctrls.pe_ctrls.bj_alu.predict_taken = predict_taken_i;
+
+        arch_regs.rs1_addr                      = arch_rs1;
+        arch_regs.rs2_addr                      = arch_rs2;
+        arch_regs.rd_addr                       = ARCH_REG_ADDR_WIDTH'('0);  // not used
+        arch_regs.rd_need                       = 1'b0;
+
+        case (func3)
+          3'h0: begin
+            dec_ctrls.pe_ctrls.bj_alu.branch_opcode = BEQ;
+            illegal_instr                           = 1'b0;
+          end
+          3'h1: begin
+            dec_ctrls.pe_ctrls.bj_alu.branch_opcode = BNE;
+            illegal_instr                           = 1'b0;
+          end
+          3'h4: begin
+            dec_ctrls.pe_ctrls.bj_alu.branch_opcode = BLTS;
+            illegal_instr                           = 1'b0;
+          end
+          3'h5: begin
+            dec_ctrls.pe_ctrls.bj_alu.branch_opcode = BGES;
+            illegal_instr                           = 1'b0;
+          end
+          3'h6: begin
+            dec_ctrls.pe_ctrls.bj_alu.branch_opcode = BLTU;
+            illegal_instr                           = 1'b0;
+          end
+          3'h7: begin
+            dec_ctrls.pe_ctrls.bj_alu.branch_opcode = BGEU;
+            illegal_instr                           = 1'b0;
+          end
+          default: begin
+            illegal_instr                           = 1'b1;
+          end
+        endcase
+
+      end
+
+      5'b11011: begin  // jal
+
+        dec_ctrls.pe_type                    = BJ_ALU;
+        dec_ctrls.pe_ctrls.bj_alu.instr_type = JAL;
+        dec_ctrls.pe_ctrls.imm               = imm_j;
+
+        arch_regs.rs1_addr                   = ARCH_REG_ADDR_WIDTH'('0);  // not used
+        arch_regs.rs2_addr                   = ARCH_REG_ADDR_WIDTH'('0);  // not used
+        arch_regs.rd_addr                    = arch_rd;
+        arch_regs.rd_need                    = |arch_rd;
+
+        illegal_instr                        = 1'b0;
+
+      end
+
+      5'b11001: begin  // jalr
+
+        if (func3 == 3'h0) begin
+
+          dec_ctrls.pe_type                      = BJ_ALU;
+          dec_ctrls.pe_ctrls.bj_alu.instr_type   = JALR;
+          dec_ctrls.pe_ctrls.imm                 = imm_i;
+
+          arch_regs.rs1_addr                     = arch_rs1;
+          arch_regs.rs2_addr                     = ARCH_REG_ADDR_WIDTH'('0);  // not used
+          arch_regs.rd_addr                      = arch_rd;
+          arch_regs.rd_need                      = |arch_rd;
+
+          illegal_instr                          = 1'b0;
+
+        end
+        else begin
+
+          illegal_instr                          = 1'b1;
+
+        end
+
+      end
+
+      5'b01101: begin  // lui
+
+        dec_ctrls.pe_type                      = INT_ALU;
+        dec_ctrls.pe_ctrls.int_alu.alu_op2_sel = SHAMT_OR_IMM;
+        dec_ctrls.pe_ctrls.int_alu.alu_opcode  = LUI;
+
+        arch_regs.rs1_addr                     = ARCH_REG_ADDR_WIDTH'('0);  // not used
+        arch_regs.rs2_addr                     = ARCH_REG_ADDR_WIDTH'('0);  // not used
+        arch_regs.rd_addr                      = arch_rd;
+        arch_regs.rd_need                      = |arch_rd;
+
+        dec_ctrls.pe_ctrls.imm                 = imm_u;
+
+        illegal_instr                          = 1'b0;
+
+      end
+
+      5'b00101: begin  // auipc
+
+        dec_ctrls.pe_type                    = BJ_ALU;
+        dec_ctrls.pe_ctrls.bj_alu.instr_type = AUIPC;
+        dec_ctrls.pe_ctrls.imm               = imm_u;
+
+        arch_regs.rs1_addr                   = ARCH_REG_ADDR_WIDTH'('0);  // not used
+        arch_regs.rs2_addr                   = ARCH_REG_ADDR_WIDTH'('0);  // not used
+        arch_regs.rd_addr                    = arch_rd;
+        arch_regs.rd_need                    = |arch_rd;
+
+
+        illegal_instr                        = 1'b0;
+
+      end
+
+      5'b00011: begin  // fence
+
+        //! TODO: Encode as a real fence after implementing cache
+        // For now NOP - x0 = x0 + x0
+
+        dec_ctrls.pe_type                      = INT_ALU;
+        dec_ctrls.pe_ctrls.int_alu.alu_opcode  = ADD;
+        dec_ctrls.pe_ctrls.int_alu.alu_op2_sel = RS2;  // RS = x0 -> not used
+
+        arch_regs.rs1_addr                     = ARCH_REG_ADDR_WIDTH'('0);  // not used
+        arch_regs.rs2_addr                     = ARCH_REG_ADDR_WIDTH'('0);  // not used
+        arch_regs.rd_addr                      = ARCH_REG_ADDR_WIDTH'('0);  // not used
+        arch_regs.rd_need                      = 1'b0;
+
+        illegal_instr                          = 1'b0;
+
+      end
+
+      5'b11100: begin  // ecall/ebreak/mret/wfi/csr etc.
+
+        //! TODO: Support later
+        // For now NOP - x0 = x0 + 0 and assert illegal_instr
+
+        dec_ctrls.pe_type                      = INT_ALU;
+        dec_ctrls.pe_ctrls.int_alu.alu_opcode  = ADD;
+        dec_ctrls.pe_ctrls.int_alu.alu_op2_sel = RS2;
+
+        arch_regs.rs1_addr                     = ARCH_REG_ADDR_WIDTH'('0);  // not used
+        arch_regs.rs2_addr                     = ARCH_REG_ADDR_WIDTH'('0);  // not used
+        arch_regs.rd_addr                      = ARCH_REG_ADDR_WIDTH'('0);  // not used
+        arch_regs.rd_need                      = 1'b0;
+
+        illegal_instr                          = 1'b1;
+
+      end
+
+      default: begin  // default - illegal instruction
+
+        illegal_instr = 1'b1;
+
+      end
+
+    endcase
+
+  end
+  else begin  // compressed instructions
+
+    illegal_instr = 1'b1;
+    // TBD: C extension
+
+  end
+
+end
+
+
+////////////////////////// OUTPUT SIGNALS ASSIGNMENT //////////////////////////
+
+assign dec_ctrls_o       = dec_ctrls;
+assign arch_regs_o       = arch_regs;
+
+assign illegal_instr_o   = illegal_instr;
+
+
+endmodule
