@@ -1,0 +1,23 @@
+# This file contains the default configuration for the Terem Core.
+# Used for debug and linting purposes, all variables are prefilled.
+
+
+# common
+module_id: teremcore
+
+# core commons
+# pipeline_width:  4
+# rob_entries:     32
+# commit_width:    4
+
+# branch and jump predictors
+# bp_level_entries: 64
+# ras_depth:        8
+
+# registers
+# phys_reg_cnt:    128
+# wba_bc_num:      -1
+
+
+# verification
+# assertions: true
