@@ -21,6 +21,18 @@ This chapter presents abbreviations which are widely used across all of the docu
 |Instruction Queue
 |Module that holds instructions waiting for their processing
 
+|IF
+|Instruction Fetcher
+|Module that contains actual and spculative PC and fetches instructions
+
+|RAU
+|Re-Allign Unit
+|Module that realligns instructions and sent early branch prediction request
+
+|DEC
+|Decoder
+|Module that decodes machine code instructions into internal control signals
+
 |RU
 |Rename Unit
 |Module that renames architectural registers to a physical ones
@@ -93,28 +105,31 @@ This chapter shows microarchitecture of Terem Core and it's internals and makes 
 | TRMC0: Fetch
 | Instructions are fetched from instruction memory and stored into IQ
 
-| TRMC1: Decode
-| Instructions selected from IQ are decoded, branch prediction process is started if any instruction is branch
+| TRMC1: Reallign
+| Instructions selected from IQ are realligned, branch prediction process is started if any instruction is branch
 
-| TRMC2: Rename
+| TRMC2: Decode
+| Instructions from RAU are decoded, target PC is calculated, branch prediction process is finished
+
+| TRMC3: Rename
 | Architectural registers for each decoded instruction are remapped to physical registers depending on RM, branch prediction process is finished, ROB entries are allocated
 
-| TRMC3: Dispatch
+| TRMC4: Dispatch
 | Instuctions are dispatched to a wakeup buffer or issue buffer of a related RSs depending on type of their PE and physical registers readiness
 
-| TRMC4: Wakeup
+| TRMC5: Wakeup
 | Instructions are moved from wakeup buffer to an issue buffer inside RS
 
-| TRMC5: Issue
+| TRMC6: Issue
 | Ready instructions are issued
 
-| TRMC6: Execute
+| TRMC7: Execute
 | Instructions are executed
 
-| TRMC7: Writeback
+| TRMC8: Writeback
 | Instruction result are written back to a PRF and ROB being notified that instruction are executed
 
-| TRMC8: Commit
+| TRMC9: Commit
 | Instructions are commited, ROB entries are deallocated, physical registers are released
 |===
 
