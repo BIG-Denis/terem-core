@@ -107,7 +107,10 @@ window_pc_t            ru_window_pc_egr_ff;
 ///////////////////////////// TARGET PC CALCULATION ////////////////////////////
 
 // goto some PC
-assign goto_v = rau_jal_v_i | rau_branch_v_i;
+assign goto_v = // if jal instruction
+                rau_jal_v_i |
+                // or if branch taken
+                rau_branch_v_i & bp_branch_taken_i;
 
 // target PC calculation
 assign target_pc = rau_bj_instr_pc_i + rau_bj_imm_i;
