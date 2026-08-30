@@ -1,0 +1,207 @@
+//
+// This file is a part of Terem Core project (https://github.com/BIG-Denis/terem-core).
+// This file generated via KaravaiSV templating engine (https://github.com/BIG-Denis/karavaisv).
+//
+// @author: BIG-Denis (https://github.com/BIG-Denis)
+// @description: Module that decodes machine code instructions into internal control signals
+//
+
+module </ module_id />_decoder
+import </ module_id />_pkg::*;
+#(
+  localparam int unsigned WAYS_NUM      = PIPELINE_WIDTH,
+  localparam int unsigned WAY_PTR_WIDTH = $clog2(WAYS_NUM)
+) (
+
+///////////////////////// EXTERNAL SIGNALS DECLARATION ////////////////////////
+
+  input  logic                          clk_i,
+  input  logic                          rstn_i,
+
+  // Pipeline
+  input  logic                          stall_i,
+  input  logic                          flush_i,
+  output logic                          flush_o,
+
+  // RAU (Re-Allign Unit)
+  input  logic [WAYS_NUM - 1:0]         rau_raw_instr_v_i,
+  input  logic [LONG_INSTR_WIDTH - 1:0] rau_raw_instr_i [0:WAYS_NUM - 1],
+
+  input  window_pc_t                    rau_window_pc_i,  // propagation only
+
+  input  logic [PC_WIDTH - 1:0]         rau_bj_instr_pc_i,
+  input  logic [DATA_WIDTH - 1:0]       rau_bj_imm_i,
+  input  logic                          rau_branch_v_i,
+  input  logic                          rau_jal_v_i,
+  input  logic [WAY_PTR_WIDTH - 1:0]    rau_bj_ptr_i,
+
+  // BP (Branch Predictor)
+  input  logic                          bp_branch_taken_i,
+
+  // RAS (Return Address Stack)
+  output logic                          ras_push_v_o,
+  output logic [PC_WIDTH - 1:0]         ras_push_pc_o,
+
+  // IF (Instruction Fetcher)
+  output logic                          if_goto_v_o,
+  output logic [PC_WIDTH - 1:0]         if_goto_pc_o,
+
+  // RU (Rename Unit)
+  output logic [WAYS_NUM - 1:0]         ru_instr_v_o,
+  output dec_ctrls_t                    ru_dec_ctrls_o  [0:WAYS_NUM - 1],
+  output arch_regs_t                    ru_arch_regs_o  [0:WAYS_NUM - 1],
+  output exception_t                    ru_exception_o  [0:WAYS_NUM - 1],
+  output window_pc_t                    ru_window_pc_o
+);
+
+///////////////////////// INTERNAL SIGNALS DECLARATION ////////////////////////
+
+// Decoded results
+
+dec_ctrls_t            dec_ctrls             [0:WAYS_NUM - 1];
+arch_regs_t            arch_regs             [0:WAYS_NUM - 1];
+
+logic [WAYS_NUM - 1:0] illegal_instr;
+
+// Exceptions
+
+exception_t            exception             [0:WAYS_NUM - 1];
+
+// RAS
+
+logic                  goto_v;
+logic [PC_WIDTH - 1:0] target_pc;
+logic                  ras_push;
+
+// RU egress registers
+
+logic [WAYS_NUM - 1:0] ru_egr_en;
+logic                  ru_window_pc_egr_en;
+
+logic [WAYS_NUM - 1:0] ru_instr_v_egr_next;
+dec_ctrls_t            ru_dec_ctrls_egr_next [0:WAYS_NUM - 1];
+arch_regs_t            ru_arch_regs_egr_next [0:WAYS_NUM - 1];
+exception_t            ru_exception_egr_next [0:WAYS_NUM - 1];
+
+logic [WAYS_NUM - 1:0] ru_instr_v_egr_ff;
+dec_ctrls_t            ru_dec_ctrls_egr_ff   [0:WAYS_NUM - 1];
+arch_regs_t            ru_arch_regs_egr_ff   [0:WAYS_NUM - 1];
+exception_t            ru_exception_egr_ff   [0:WAYS_NUM - 1];
+window_pc_t            ru_window_pc_egr_ff;
+
+
+///////////////////////////// DECODER WAY INSTANCES ////////////////////////////
+
+<$ for way in range(pipeline_width): $>
+</ module_id />_decoder_way i_decoder_way_</ way /> (
+  .instr_i         (rau_raw_instr_i[</ way />]),
+  .predict_taken_i (bp_branch_taken_i),
+  .dec_ctrls_o     (dec_ctrls[</ way />]),
+  .arch_regs_o     (arch_regs[</ way />]),
+  .illegal_instr_o (illegal_instr[</ way />])
+);
+
+<$ end $>
+
+
+///////////////////////////// TARGET PC CALCULATION ////////////////////////////
+
+// goto some PC
+assign goto_v = rau_jal_v_i | rau_branch_v_i;
+
+// target PC calculation
+assign target_pc = rau_bj_instr_pc_i + rau_bj_imm_i;
+
+// push logic
+assign ras_push = rau_jal_v_i &
+                  // RAS push only if RD either x1 or x5
+                  (arch_regs[rau_bj_ptr_i].rd_addr inside {5'd1, 5'd5});
+
+
+////////////////////////////// EXCEPTION HANDLING //////////////////////////////
+
+// cause
+<$ for way in range(pipeline_width): $>
+assign exception[</ way />].cause = ILLEGAL_INSTR;
+<$ end $>
+
+// validity
+<$ for way in range(pipeline_width): $>
+assign exception[</ way />].valid = illegal_instr[</ way />];
+<$ end $>
+
+
+/////////////////////////////// EGRESS REGISTERS ///////////////////////////////
+
+// valid
+
+assign ru_instr_v_egr_next = rau_raw_instr_v_i & ~{WAYS_NUM{flush_i}};
+
+always_ff @(posedge clk_i) begin
+  if (~rstn_i) begin
+    ru_instr_v_egr_ff <= WAYS_NUM'('0);
+  end
+  else begin
+    ru_instr_v_egr_ff <= ru_instr_v_egr_next;
+  end
+end
+
+// payload
+
+assign ru_dec_ctrls_egr_next = dec_ctrls;
+assign ru_arch_regs_egr_next = arch_regs;
+assign ru_exception_egr_next = exception;
+
+assign ru_egr_en = rau_raw_instr_v_i &
+                   // do not update egresses value when stall or flush
+                   ~{WAYS_NUM{stall_i | flush_i}};
+
+<$ for way in range(pipeline_width): $>
+always_ff @(posedge clk_i) begin
+  if (ru_egr_en[</ way />]) begin
+    ru_dec_ctrls_egr_ff[</ way />] <= ru_dec_ctrls_egr_next[</ way />];
+    ru_arch_regs_egr_ff[</ way />] <= ru_arch_regs_egr_next[</ way />];
+    ru_exception_egr_ff[</ way />] <= ru_exception_egr_next[</ way />];
+  end
+end
+
+<$ end $>
+
+// window PC
+
+assign ru_window_pc_egr_en = |ru_egr_en;  // update PC window if any new instructions
+
+always_ff @(posedge clk_i) begin
+  if (ru_window_pc_egr_en) begin
+    ru_window_pc_egr_ff <= rau_window_pc_i;
+  end
+end
+
+
+////////////////////////// EXTERNAL SIGNALS ASSIGNMENT /////////////////////////
+
+// Pipeline
+assign flush_o        = goto_v;
+
+// RAS (Return Address Stack)
+assign ras_push_v_o   = ras_push;
+assign ras_push_pc_o  = target_pc;
+
+// IF (Instruction Fetcher)
+assign if_goto_v_o    = goto_v;
+assign if_goto_pc_o   = target_pc;
+
+// RU (Rename Unit)
+assign ru_instr_v_o   = ru_instr_v_egr_ff;
+assign ru_dec_ctrls_o = ru_dec_ctrls_egr_ff;
+assign ru_arch_regs_o = ru_arch_regs_egr_ff;
+assign ru_exception_o = ru_exception_egr_ff;
+assign ru_window_pc_o = ru_window_pc_egr_ff;
+
+
+////////////////////////////////// ASSERTIONS //////////////////////////////////
+
+// TBD
+
+
+endmodule
