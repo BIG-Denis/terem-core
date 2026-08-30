@@ -10,7 +10,7 @@
 # ----------------------------------------
 
 # Makefile utls
-.PHONY: help init build lint clean
+.PHONY: help init build lint lint-wall clean clean-all
 .DEFAULT_GOAL := help
 
 # Variables
