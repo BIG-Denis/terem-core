@@ -89,7 +89,6 @@ logic [WAYS_NUM - 1:0] ru_instr_v_egr_ff;
 
 logic [WAYS_NUM - 1:0] ru_egr_en;
 
-logic [WAYS_NUM - 1:0] ru_instr_v_egr_next;
 dec_ctrls_t            ru_dec_ctrls_egr_next [0:WAYS_NUM - 1];
 arch_regs_t            ru_arch_regs_egr_next [0:WAYS_NUM - 1];
 exception_t            ru_exception_egr_next [0:WAYS_NUM - 1];
