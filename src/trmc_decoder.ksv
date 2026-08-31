@@ -84,18 +84,21 @@ logic                  flush;
 
 // RU egress registers
 
+logic [WAYS_NUM - 1:0] ru_instr_v_egr_next;
+logic [WAYS_NUM - 1:0] ru_instr_v_egr_ff;
+
 logic [WAYS_NUM - 1:0] ru_egr_en;
-logic                  ru_window_pc_egr_en;
 
 logic [WAYS_NUM - 1:0] ru_instr_v_egr_next;
 dec_ctrls_t            ru_dec_ctrls_egr_next [0:WAYS_NUM - 1];
 arch_regs_t            ru_arch_regs_egr_next [0:WAYS_NUM - 1];
 exception_t            ru_exception_egr_next [0:WAYS_NUM - 1];
 
-logic [WAYS_NUM - 1:0] ru_instr_v_egr_ff;
 dec_ctrls_t            ru_dec_ctrls_egr_ff   [0:WAYS_NUM - 1];
 arch_regs_t            ru_arch_regs_egr_ff   [0:WAYS_NUM - 1];
 exception_t            ru_exception_egr_ff   [0:WAYS_NUM - 1];
+
+logic                  ru_window_pc_egr_en;
 window_pc_t            ru_window_pc_egr_ff;
 
 
@@ -174,7 +177,9 @@ assign exception[</ way />].valid = illegal_instr[</ way />];
 
 // valid
 
-assign ru_instr_v_egr_next = rau_raw_instr_v_i & ~{WAYS_NUM{flush_i}};
+assign ru_instr_v_egr_next = flush_i ? WAYS_NUM'('0)
+                           : stall_i ? ru_instr_v_egr_ff
+                           : rau_raw_instr_v_i;
 
 always_ff @(posedge clk_i) begin
   if (~rstn_i) begin
@@ -364,6 +369,22 @@ assert property (@(posedge clk_i) disable iff (!rstn_i)
   else $error("ru_instr_v_o must be known!");
 
 // Everything else in RU output signals can contain x'es or just propogation
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  stall_i |=> $stable(ru_dec_ctrls_o))
+  else $error("ru_dec_ctrls_o must remain stable while stall_i is high!");
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  stall_i |=> $stable(ru_arch_regs_o))
+  else $error("ru_arch_regs_o must remain stable while stall_i is high!");
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  stall_i |=> $stable(ru_exception_o))
+  else $error("ru_exception_o must remain stable while stall_i is high!");
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  stall_i |=> $stable(ru_window_pc_o))
+  else $error("ru_window_pc_o must remain stable while stall_i is high!");
 
 
 // Internal signals
