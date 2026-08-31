@@ -204,7 +204,136 @@ assign ru_window_pc_o = ru_window_pc_egr_ff;
 
 /////////////////////////////////////// ASSERTIONS //////////////////////////////////////
 
-// TBD
+// Auxiliary signals
+
+logic verif_any_bj_instr;
+assign verif_any_bj_instr = rau_branch_v_i | rau_jal_v_i | rau_jalr_v_i;
+
+// Pipeline
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  !$isunknown(stall_i))
+  else $error("stall_i must be known!");
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  !$isunknown(stall_o))
+  else $error("stall_o must be known!");
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  !$isunknown(flush_i))
+  else $error("flush_i must be known!");
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  !$isunknown(flush_o))
+  else $error("flush_o must be known!");
+
+
+// RAU (Re-Allign Unit)
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  !$isunknown(rau_raw_instr_v_i))
+  else $error("rau_raw_instr_v_i must be known!");
+
+<$ for way in range(pipeline_width): $>
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  rau_raw_instr_v_i[</ way />] |-> !$isunknown(rau_window_pc_i.is_long_instr_vec[</ way />]))
+  else $error("rau_window_pc_i.is_long_instr_vec[</ way />] must be known when rau_raw_instr_v_i[</ way />] is high!");
+<$ end $>
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  (|rau_raw_instr_v_i) |-> !$isunknown(rau_window_pc_i.base_pc))
+  else $error("rau_window_pc_i.is_long_instr_vec must be known when any bit of rau_raw_instr_v_i is high!");
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  stall_o |=> $stable(rau_raw_instr_i))
+  else $error("rau_raw_instr_i must remain stable while stall_o is high!");
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  !$isunknown(rau_raw_instr_v_i))
+  else $error("rau_raw_instr_v_i must be known!");
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  !$isunknown(rau_branch_v_i))
+  else $error("rau_branch_v_i must be known!");
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  !$isunknown(rau_jal_v_i))
+  else $error("rau_jal_v_i must be known!");
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  !$isunknown(rau_jalr_v_i))
+  else $error("rau_jalr_v_i must be known!");
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  verif_any_bj_instr |-> !$isunknown(rau_bj_ptr_i))
+  else $error("rau_bj_ptr_i must be known when any BJ instruction is pending!");
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  verif_any_bj_instr |-> !$isunknown(rau_bj_instr_pc_i))
+  else $error("rau_bj_instr_pc_i must be known when any BJ instruction is pending!");
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  verif_any_bj_instr |-> !$isunknown(rau_bj_imm_i))
+  else $error("rau_bj_imm_i must be known when any BJ instruction!");
+
+
+// BP (Branch Predictor)
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  rau_branch_v_i |-> !$isunknown(bp_branch_taken_i))
+  else $error("bp_branch_taken_i must be known when rau_branch_v_i is high!");
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  stall_o |=> $stable(bp_branch_taken_i))
+  else $error("bp_branch_taken_i must remain stable while stall_o is high!");
+
+
+// RAS (Return Address Stack)
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  !$isunknown(ras_pop_v_o))
+  else $error("ras_pop_v_o must be known!");
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  !$isunknown(ras_push_v_o))
+  else $error("ras_push_v_o must be known!");
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  ras_push_v_o |-> !$isunknown(ras_push_pc_o))
+  else $error("ras_push_pc_o must be known when ras_push_v_o is high!");
+
+
+// IF (Instruction Fetcher)
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  !$isunknown(if_goto_ras_v_o))
+  else $error("if_goto_ras_v_o must be known!");
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  !$isunknown(if_goto_v_o))
+  else $error("if_goto_v_o must be known!");
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  if_goto_v_o |-> !$isunknown(if_goto_pc_o))
+  else $error("if_goto_pc_o must be known when if_goto_v_o is high!");
+
+
+// RU (Rename Unit)
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  !$isunknown(ru_instr_v_o))
+  else $error("ru_instr_v_o must be known!");
+
+// Everything else in RU output signals can contain x'es or just propogation
+
+
+// Internal signals
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  verif_any_bj_instr |-> (if_goto_ras_v_o | if_goto_v_o))
+  else $error("either if_goto_ras_v_o or if_goto_v_o must be high if any BJ instruction!");
+
+<$ end $>
 
 
 endmodule
