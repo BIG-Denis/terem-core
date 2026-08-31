@@ -71,6 +71,11 @@ logic [WAYS_NUM - 1:0] illegal_instr;
 
 exception_t            exception             [0:WAYS_NUM - 1];
 
+// Pipeline
+
+logic                  flush;
+logic                  stall;
+
 // RAS
 
 logic                  goto_ras_v;
@@ -79,8 +84,6 @@ logic [PC_WIDTH - 1:0] target_pc;
 
 logic                  ras_pop;
 logic                  ras_push;
-
-logic                  flush;
 
 // RU egress registers
 
@@ -99,6 +102,18 @@ exception_t            ru_exception_egr_ff   [0:WAYS_NUM - 1];
 
 logic                  ru_window_pc_egr_en;
 window_pc_t            ru_window_pc_egr_ff;
+
+
+////////////////////////////// INTERNAL SIGNALS ASSIGNMENT //////////////////////////////
+
+// flush
+assign flush = goto_v | goto_ras_v;  // if any PC change
+
+// stall
+assign stall = // egress registers are free or
+               ~(|rau_raw_instr_v_i) |
+               // no incoming stall (guarantees further propagation)
+               ~stall_i;
 
 
 ///////////////////////////////// DECODER WAY INSTANCES /////////////////////////////////
@@ -154,9 +169,6 @@ assign ras_pop  = // do not make multiple pops due to to stall or push
                        (arch_regs[rau_bj_ptr_i].rs1_addr inside {5'd1, 5'd5})
                     )
                   );
-
-// flush
-assign flush = goto_v | goto_ras_v;  // if any PC change
 
 
 /////////////////////////////////// EXCEPTION HANDLING //////////////////////////////////
@@ -225,6 +237,7 @@ end
 
 // Pipeline
 assign flush_o         = flush;
+assign stall_o         = stall;
 
 // RAS (Return Address Stack)
 assign ras_pop_v_o     = ras_pop;
