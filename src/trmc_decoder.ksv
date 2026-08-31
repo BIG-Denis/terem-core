@@ -13,7 +13,7 @@ import </ module_id />_pkg::*;
   localparam int unsigned WAY_PTR_WIDTH = $clog2(WAYS_NUM)
 ) (
 
-///////////////////////// EXTERNAL SIGNALS DECLARATION ////////////////////////
+////////////////////////////// EXTERNAL SIGNALS DECLARATION /////////////////////////////
 
   input  logic                          clk_i,
   input  logic                          rstn_i,
@@ -54,7 +54,7 @@ import </ module_id />_pkg::*;
   output window_pc_t                    ru_window_pc_o
 );
 
-///////////////////////// INTERNAL SIGNALS DECLARATION ////////////////////////
+////////////////////////////// INTERNAL SIGNALS DECLARATION /////////////////////////////
 
 // Decoded results
 
@@ -90,7 +90,7 @@ exception_t            ru_exception_egr_ff   [0:WAYS_NUM - 1];
 window_pc_t            ru_window_pc_egr_ff;
 
 
-///////////////////////////// DECODER WAY INSTANCES ////////////////////////////
+///////////////////////////////// DECODER WAY INSTANCES /////////////////////////////////
 
 <$ for way in range(pipeline_width): $>
 </ module_id />_decoder_way i_decoder_way_</ way /> (
@@ -104,7 +104,7 @@ window_pc_t            ru_window_pc_egr_ff;
 <$ end $>
 
 
-///////////////////////////// TARGET PC CALCULATION ////////////////////////////
+///////////////////////////////// TARGET PC CALCULATION /////////////////////////////////
 
 // goto some PC
 assign goto_v = // if jal instruction
@@ -134,7 +134,7 @@ assign exception[</ way />].valid = illegal_instr[</ way />];
 <$ end $>
 
 
-/////////////////////////////// EGRESS REGISTERS ///////////////////////////////
+//////////////////////////////////// EGRESS REGISTERS ///////////////////////////////////
 
 // valid
 
@@ -181,7 +181,7 @@ always_ff @(posedge clk_i) begin
 end
 
 
-////////////////////////// EXTERNAL SIGNALS ASSIGNMENT /////////////////////////
+////////////////////////////// EXTERNAL SIGNALS ASSIGNMENT //////////////////////////////
 
 // Pipeline
 assign flush_o        = goto_v;
@@ -202,7 +202,7 @@ assign ru_exception_o = ru_exception_egr_ff;
 assign ru_window_pc_o = ru_window_pc_egr_ff;
 
 
-////////////////////////////////// ASSERTIONS //////////////////////////////////
+/////////////////////////////////////// ASSERTIONS //////////////////////////////////////
 
 // TBD
 

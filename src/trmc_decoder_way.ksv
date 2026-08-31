@@ -9,6 +9,9 @@
 module </ module_id />_decoder_way
 import </ module_id />_pkg::*;
 (
+
+////////////////////////////// EXTERNAL SIGNALS DECLARATION /////////////////////////////
+
   input  logic [LONG_INSTR_WIDTH - 1:0] instr_i,
   input  logic                          predict_taken_i,
 
@@ -17,7 +20,7 @@ import </ module_id />_pkg::*;
   output logic                          illegal_instr_o
 );
 
-//////////////////////// INTERNAL CONSTANTS DECLARATION ///////////////////////
+///////////////////////////// INTERNAL CONSTANTS DECLARATION ////////////////////////////
 
 localparam int unsigned COMPR_INSTR_OPCODE_WIDTH = 2;
 localparam int unsigned LONG_INSTR_OPCODE_WIDTH  = 5;
@@ -33,7 +36,7 @@ localparam int unsigned IMM_J_BASE_WIDTH         = 20;
 localparam int unsigned SHAMT_BASE_WIDTH         = 5;
 
 
-///////////////////////// INTERNAL SIGNALS DECLARATION ////////////////////////
+////////////////////////////// INTERNAL SIGNALS DECLARATION /////////////////////////////
 
 // architectural fields
 
@@ -70,7 +73,7 @@ arch_regs_t                            arch_regs;
 logic                                  illegal_instr;
 
 
-///////////////////////// INTERNAL SIGNALS ASSIGNMENT /////////////////////////
+////////////////////////////// INTERNAL SIGNALS ASSIGNMENT //////////////////////////////
 
 // architectural fields
 
@@ -99,7 +102,7 @@ assign arch_rs2                = instr_i[24:20];
 assign arch_rd                 = instr_i[11:7];
 
 
-////////////////////////////// INSTRUCTION DECODE /////////////////////////////
+/////////////////////////////////// INSTRUCTION DECODE //////////////////////////////////
 
 always_comb begin
 
@@ -519,7 +522,7 @@ always_comb begin
 end
 
 
-////////////////////////// OUTPUT SIGNALS ASSIGNMENT //////////////////////////
+/////////////////////////////// OUTPUT SIGNALS ASSIGNMENT ///////////////////////////////
 
 assign dec_ctrls_o       = dec_ctrls;
 assign arch_regs_o       = arch_regs;
