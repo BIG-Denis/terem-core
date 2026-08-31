@@ -80,6 +80,14 @@ typedef enum logic [1:0] { BRANCH, JAL, JALR, AUIPC }         bj_alu_instr_type_
 typedef enum logic [2:0] { BEQ, BNE, BLTS, BGES, BLTU, BGEU } bj_alu_branch_opcode_t;
 
 
+// Re-Allign Unit types
+
+typedef struct packed {
+  logic [PC_WIDTH - 1:0]       base_pc;
+  logic [PIPELINE_WIDTH - 1:0] is_long_instr_vec;
+} window_pc_t;
+
+
 // Decoder types
 
 typedef enum logic [1:0] { INT_ALU, BJ_ALU, DMEM_LOAD, DMEM_STORE } pe_type_t;
