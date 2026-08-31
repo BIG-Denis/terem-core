@@ -1,0 +1,123 @@
+//
+// This file is a part of Terem Core project (https://github.com/BIG-Denis/terem-core).
+// This file generated via KaravaiSV templating engine (https://github.com/BIG-Denis/karavaisv).
+//
+// @author: BIG-Denis (https://github.com/BIG-Denis)
+// @description: Package that contains main constants used across multiple modules
+//
+
+package </ module_id />_pkg;
+
+/////////////////////////////////// GENERIC PARAMETERS //////////////////////////////////
+
+// common
+localparam int unsigned DATA_WIDTH             = 32;
+localparam int unsigned PC_WIDTH               = 32;
+localparam int unsigned BYTE_WIDTH             = 8;
+localparam int unsigned LONG_INSTR_WIDTH       = 32;
+localparam int unsigned COMPR_INSTR_WIDTH      = 16;
+
+// architectural registers
+localparam int unsigned ARCH_REG_CNT           = 32;
+localparam int unsigned ARCH_REG_ADDR_WIDTH    = $clog2(ARCH_REG_CNT);
+
+// pipeline
+localparam int unsigned PIPELINE_WIDTH = </ pipeline_width />;
+
+
+///////////////////////////////////// INTERNAL TYPES ////////////////////////////////////
+
+// Registers
+
+typedef struct packed {
+  logic                             rd_need;
+  logic [ARCH_REG_ADDR_WIDTH - 1:0] rs1_addr;
+  logic [ARCH_REG_ADDR_WIDTH - 1:0] rs2_addr;
+  logic [ARCH_REG_ADDR_WIDTH - 1:0] rd_addr;
+} arch_regs_t;
+
+// TODO: Physical registers and converting functions
+
+
+// Exceptions
+
+typedef enum logic [3:0] {
+  INSTR_ADRR_MISALLIGNED     = 0,
+  ILLEGAL_INSTR              = 2,
+  BREAKPOINT                 = 3,
+  LOAD_ADDR_MISALLIGNED      = 4,
+  STORE_AMO_ADDR_MISALLIGNED = 6,
+  ECALL_M_MODE               = 11
+} exception_cause_t;
+
+typedef struct packed {
+  logic             valid;
+  exception_cause_t cause;
+} exception_t;
+
+
+// Int ALU
+
+typedef enum logic [3:0] {
+  ADD,  SUB,
+  XOR,  OR,   AND,
+  SLL,  SRA,  SRL,
+  SLTS, SLTU,
+  LUI
+} int_alu_opcode_t;
+
+typedef enum logic       { RS2, SHAMT_OR_IMM } int_alu_op2_sel_t;
+
+
+// LSU/DMEM
+
+typedef enum logic [2:0] { WORD, HALF_S, HALF_U, BYTE_S, BYTE_U } dmem_word_pt_t;
+
+
+// BJ ALU
+
+typedef enum logic [1:0] { BRANCH, JAL, JALR, AUIPC }         bj_alu_instr_type_t;
+typedef enum logic [2:0] { BEQ, BNE, BLTS, BGES, BLTU, BGEU } bj_alu_branch_opcode_t;
+
+
+// Re-Allign Unit types
+
+typedef struct packed {
+  logic [PC_WIDTH - 1:0]       base_pc;
+  logic [PIPELINE_WIDTH - 1:0] is_long_instr_vec;
+} window_pc_t;
+
+
+// Decoder types
+
+typedef enum logic [1:0] { INT_ALU, BJ_ALU, DMEM_LOAD, DMEM_STORE } pe_type_t;
+
+typedef struct packed {
+  int_alu_opcode_t         alu_opcode;
+  int_alu_op2_sel_t        alu_op2_sel;
+} dec_ctrls_int_alu_t;
+
+typedef struct packed {
+  dmem_word_pt_t           word_pt;
+} dec_ctrls_dmem_t;
+
+typedef struct packed {
+  bj_alu_instr_type_t      instr_type;
+  bj_alu_branch_opcode_t   branch_opcode;
+  logic                    predict_taken;
+} dec_ctrls_bj_alu_t;
+
+typedef struct packed {
+  logic [DATA_WIDTH - 1:0] imm;
+  dec_ctrls_int_alu_t      int_alu;
+  dec_ctrls_dmem_t         dmem;
+  dec_ctrls_bj_alu_t       bj_alu;
+} dec_pe_t;
+
+typedef struct packed {
+  pe_type_t                pe_type;
+  dec_pe_t                 pe_ctrls;
+} dec_ctrls_t;
+
+
+endpackage
