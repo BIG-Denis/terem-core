@@ -220,12 +220,12 @@ end
 ////////////////////////////// EXTERNAL SIGNALS ASSIGNMENT //////////////////////////////
 
 // Pipeline
-assign flush_o        = flush;
+assign flush_o         = flush;
 
 // RAS (Return Address Stack)
-assign ras_pop_v_o    = ras_pop;
-assign ras_push_v_o   = ras_push;
-assign ras_push_pc_o  = target_pc;
+assign ras_pop_v_o     = ras_pop;
+assign ras_push_v_o    = ras_push;
+assign ras_push_pc_o   = target_pc;
 
 // IF (Instruction Fetcher)
 assign if_goto_ras_v_o = goto_ras_v;
@@ -233,11 +233,11 @@ assign if_goto_v_o     = goto_v;
 assign if_goto_pc_o    = target_pc;
 
 // RU (Rename Unit)
-assign ru_instr_v_o   = ru_instr_v_egr_ff;
-assign ru_dec_ctrls_o = ru_dec_ctrls_egr_ff;
-assign ru_arch_regs_o = ru_arch_regs_egr_ff;
-assign ru_exception_o = ru_exception_egr_ff;
-assign ru_window_pc_o = ru_window_pc_egr_ff;
+assign ru_instr_v_o    = ru_instr_v_egr_ff;
+assign ru_dec_ctrls_o  = ru_dec_ctrls_egr_ff;
+assign ru_arch_regs_o  = ru_arch_regs_egr_ff;
+assign ru_exception_o  = ru_exception_egr_ff;
+assign ru_window_pc_o  = ru_window_pc_egr_ff;
 
 
 <$ if assertions: $>
