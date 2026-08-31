@@ -20,6 +20,7 @@ import </ module_id />_pkg::*;
 
   // Pipeline
   input  logic                          stall_i,
+  output logic                          stall_o,
   input  logic                          flush_i,
   output logic                          flush_o,
 
@@ -33,16 +34,19 @@ import </ module_id />_pkg::*;
   input  logic [DATA_WIDTH - 1:0]       rau_bj_imm_i,
   input  logic                          rau_branch_v_i,
   input  logic                          rau_jal_v_i,
+  input  logic                          rau_jalr_v_i,
   input  logic [WAY_PTR_WIDTH - 1:0]    rau_bj_ptr_i,
 
   // BP (Branch Predictor)
   input  logic                          bp_branch_taken_i,
 
   // RAS (Return Address Stack)
+  output logic                          ras_pop_v_o,
   output logic                          ras_push_v_o,
   output logic [PC_WIDTH - 1:0]         ras_push_pc_o,
 
   // IF (Instruction Fetcher)
+  output logic                          if_goto_ras_v_o,
   output logic                          if_goto_v_o,
   output logic [PC_WIDTH - 1:0]         if_goto_pc_o,
 
@@ -69,9 +73,14 @@ exception_t            exception             [0:WAYS_NUM - 1];
 
 // RAS
 
+logic                  goto_ras_v;
 logic                  goto_v;
 logic [PC_WIDTH - 1:0] target_pc;
+
+logic                  ras_pop;
 logic                  ras_push;
+
+logic                  flush;
 
 // RU egress registers
 
@@ -106,22 +115,49 @@ window_pc_t            ru_window_pc_egr_ff;
 
 ///////////////////////////////// TARGET PC CALCULATION /////////////////////////////////
 
-// goto some PC
-assign goto_v = // if jal instruction
-                rau_jal_v_i |
-                // or if branch taken
-                rau_branch_v_i & bp_branch_taken_i;
+// goto calcilated PC
+assign goto_v = // if branch taken or
+                rau_branch_v_i & bp_branch_taken_i |
+                // if jal instruction
+                rau_jal_v_i;
+
+// goto PC from RAS top (pop)
+assign goto_ras_v = ras_pop;
 
 // target PC calculation
 assign target_pc = rau_bj_instr_pc_i + rau_bj_imm_i;
 
 // push logic
-assign ras_push = rau_jal_v_i &
-                  // RAS push only if RD either x1 or x5
-                  (arch_regs[rau_bj_ptr_i].rd_addr inside {5'd1, 5'd5});
+assign ras_push = // do not make multiple pushes due to to stall or push
+                  ~(stall_i | flush_i) & (
+                    // jal to x1 or x5
+                    rau_jal_v_i  & (arch_regs[rau_bj_ptr_i].rd_addr inside {5'd1, 5'd5}) |
+                    // jalr to x1 or x5
+                    rau_jalr_v_i & (arch_regs[rau_bj_ptr_i].rd_addr inside {5'd1, 5'd5})
+                  );
+
+// pop logic
+assign ras_pop  = // do not make multiple pops due to to stall or push
+                  ~(stall_i | flush_i) & (
+                    // jalr to x1 or x5 and rs1 is x1 or x5
+                    (
+                      rau_jalr_v_i &
+                      (arch_regs[rau_bj_ptr_i].rd_addr  inside {5'd1, 5'd5}) &
+                      (arch_regs[rau_bj_ptr_i].rs1_addr inside {5'd1, 5'd5})
+                    ) |
+                    // jalr to not x1 or x5 and rs1 is x1 or x5
+                    (
+                      rau_jalr_v_i &
+                      ~(arch_regs[rau_bj_ptr_i].rd_addr  inside {5'd1, 5'd5}) &
+                       (arch_regs[rau_bj_ptr_i].rs1_addr inside {5'd1, 5'd5})
+                    )
+                  );
+
+// flush
+assign flush = goto_v | goto_ras_v;  // if any PC change
 
 
-////////////////////////////// EXCEPTION HANDLING //////////////////////////////
+/////////////////////////////////// EXCEPTION HANDLING //////////////////////////////////
 
 // cause
 <$ for way in range(pipeline_width): $>
@@ -184,15 +220,17 @@ end
 ////////////////////////////// EXTERNAL SIGNALS ASSIGNMENT //////////////////////////////
 
 // Pipeline
-assign flush_o        = goto_v;
+assign flush_o        = flush;
 
 // RAS (Return Address Stack)
+assign ras_pop_v_o    = ras_pop;
 assign ras_push_v_o   = ras_push;
 assign ras_push_pc_o  = target_pc;
 
 // IF (Instruction Fetcher)
-assign if_goto_v_o    = goto_v;
-assign if_goto_pc_o   = target_pc;
+assign if_goto_ras_v_o = goto_ras_v;
+assign if_goto_v_o     = goto_v;
+assign if_goto_pc_o    = target_pc;
 
 // RU (Rename Unit)
 assign ru_instr_v_o   = ru_instr_v_egr_ff;
@@ -202,6 +240,7 @@ assign ru_exception_o = ru_exception_egr_ff;
 assign ru_window_pc_o = ru_window_pc_egr_ff;
 
 
+<$ if assertions: $>
 /////////////////////////////////////// ASSERTIONS //////////////////////////////////////
 
 // Auxiliary signals
