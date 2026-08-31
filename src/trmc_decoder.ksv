@@ -188,8 +188,11 @@ assign exception[</ way />].valid = illegal_instr[</ way />];
 
 // valid
 
-assign ru_instr_v_egr_next = flush_i ? WAYS_NUM'('0)
+assign ru_instr_v_egr_next = // invalidate when flush
+                             flush_i ? WAYS_NUM'('0)
+                             // do not change when incoming stall
                            : stall_i ? ru_instr_v_egr_ff
+                             // othewise next value
                            : rau_raw_instr_v_i;
 
 always_ff @(posedge clk_i) begin
