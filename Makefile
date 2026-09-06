@@ -9,7 +9,7 @@
 #   Makefile configuration and variables
 # ----------------------------------------
 
-# Makefile utls
+# Makefile utils
 .PHONY: help init build lint lint-wall clean clean-all
 .DEFAULT_GOAL := help
 
@@ -19,7 +19,7 @@ VENV_NAME     = .venv
 VENV_PYTHON   = $(VENV_NAME)/bin/python
 VENV_PIP      = $(VENV_NAME)/bin/pip
 REQUIREMENTS  = scripts/requirements.txt
-BUILD_SCRIPT  = scripts/build.py
+BUILD_SCRIPT  = scripts/gen/build.py
 BUILD_DIR     = build
 FILELIST_PATH = project/filelists/trmc_filelist.f
 
