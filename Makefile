@@ -14,14 +14,14 @@
 .DEFAULT_GOAL := help
 
 # Variables
-PYTHON        = python3
-VENV_NAME     = .venv
-VENV_PYTHON   = $(VENV_NAME)/bin/python
-VENV_PIP      = $(VENV_NAME)/bin/pip
-REQUIREMENTS  = scripts/requirements.txt
-BUILD_SCRIPT  = scripts/gen/build.py
-BUILD_DIR     = build
-FILELIST_PATH = project/filelists/trmc_filelist.f
+PYTHON       = python3
+VENV_NAME    = .venv
+VENV_PYTHON  = $(VENV_NAME)/bin/python
+VENV_PIP     = $(VENV_NAME)/bin/pip
+REQUIREMENTS = scripts/requirements.txt
+BUILD_SCRIPT = scripts/gen/build.py
+BUILD_DIR    = build
+FILELIST     = project/filelists/trmc_filelist.f
 
 # ----------------------------------------
 #   Makefile targets
@@ -55,13 +55,13 @@ build:
 lint:
 	@echo "> Linting design with verilator..."
 	cd build && \
-	verilator --lint-only -sv -f $(FILELIST_PATH)
+	verilator --lint-only -sv -f $(FILELIST)
 
 # lint-wall: lint builded design with verilator showing all warnings
 lint-wall:
 	@echo "> Linting design with verilator showing all warnings..."
 	cd build && \
-	verilator --lint-only -sv -Wall -f $(FILELIST_PATH)
+	verilator --lint-only -sv -Wall -f $(FILELIST)
 
 # clean - clean build folder
 clean:
