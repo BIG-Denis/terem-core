@@ -1,0 +1,205 @@
+//
+// This file is a part of Terem Core project (https://github.com/BIG-Denis/terem-core).
+// This file generated via KaravaiSV templating engine (https://github.com/BIG-Denis/karavaisv).
+//
+// @author: BIG-Denis (https://github.com/BIG-Denis)
+// @description: Module that realligns instructions, calucletes PC and early finds branches and jumps
+//
+
+module </ module_id />_reallign_unit
+import </ module_id />_pkg::*;
+#(
+  localparam int unsigned WAYS_NUM      = PIPELINE_WIDTH,
+  localparam int unsigned WAY_PTR_WIDTH = $clog2(WAYS_NUM)
+) (
+
+////////////////////////////// EXTERNAL SIGNALS DECLARATION /////////////////////////////
+
+  input  logic                             clk_i,
+  input  logic                             rstn_i,
+
+  // Pipeline
+  input  logic                             stall_i,
+  input  logic                             flush_i,
+
+  // IQ (Instruction Queue)
+  input  logic                             iq_instr_pack_v_i,
+  input  logic [IQ_INSTR_PACK_WIDTH - 1:0] iq_instr_pack_i,
+  input  logic [PC_WIDTH - 1:0]            iq_instr_pack_base_pc_i,
+  output logic [IQ_READ_ACK_WIDTH - 1:0]   iq_instr_pack_read_v_o,
+
+  // BP (Branch Predictor)
+  output logic                             bp_predict_v_o,
+  output logic [BP_HASH_BITS_NUM - 1:0]    bp_predict_hash_o,
+
+  // DEC (Decoder)
+  output logic [WAYS_NUM - 1:0]            dec_raw_instr_v_o,
+  output logic [LONG_INSTR_WIDTH - 1:0]    dec_raw_instr_o [0:WAYS_NUM - 1],
+
+  output window_pc_t                       dec_window_pc_o,
+
+  output logic [PC_WIDTH - 1:0]            dec_bj_instr_pc_o,
+  output logic [DATA_WIDTH - 1:0]          dec_bj_imm_o,
+  output logic                             dec_branch_v_o,
+  output logic                             dec_jal_v_o,
+  output logic                             dec_jalr_v_o,
+  output logic [WAY_PTR_WIDTH - 1:0]       dec_bj_ptr_o
+);
+
+///////////////////////////// INTERNAL CONSTANTS DECLARATION ////////////////////////////
+
+// Previous instructions counters widths
+
+<$ for instr in range(pipeline_width): $>
+localparam int unsigned PREV_</ instr />_NUM_WIDTH = $clog2(</ instr /> + 1);
+<$ end $>
+
+// Instruction offset width
+
+localparam int unsigned INSTR_OFFSET_WIDTH         = $clog2(IQ_INSTR_PACK_WIDTH);
+
+////////////////////////////// INTERNAL SIGNALS DECLARATION /////////////////////////////
+
+// Reallign instructions
+
+logic [WAYS_NUM - 1:0]                   is_long_instr;
+
+<$ for instr in range(pipeline_width): $>
+logic [PREV_</ instr />_NUM_WIDTH - 1:0] long_instr_num_prev_</ instr />;
+<$ end $>
+
+logic [INSTR_OFFSET_WIDTH - 1:0]         instr_offset       [0:WAYS_NUM - 1];
+logic [LONG_INSTR_WIDTH - 1:0]           realligned_instr   [0:WAYS_NUM - 1];
+
+// instructions PC
+
+logic [PC_WIDTH - 1:0]                   instr_pc           [0:WAYS_NUM - 1];
+
+window_pc_t                              window_pc;
+
+// Branch and jump detection
+
+logic                                    is_branch_v;
+logic                                    is_jal_v;
+logic                                    is_jalr_v;
+logic [WAY_PTR_WIDTH - 1:0]              bj_instr_ptr;
+
+// DEC egress registers
+
+logic [WAYS_NUM - 1:0]                   dec_raw_instr_v_next;
+logic [WAYS_NUM - 1:0]                   dec_raw_instr_v_ff;
+
+logic [WAYS_NUM - 1:0]                   dec_egr_en;
+
+logic [LONG_INSTR_WIDTH - 1:0]           dec_raw_instr_next [0:WAYS_NUM - 1];
+logic [PC_WIDTH - 1:0]                   dec_bj_instr_pc_next;
+logic [DATA_WIDTH - 1:0]                 dec_bj_imm_next;
+logic                                    dec_branch_v_next;
+logic                                    dec_jal_v_next;
+logic                                    dec_jalr_v_next;
+logic [WAY_PTR_WIDTH - 1:0]              dec_bj_ptr_next;
+
+logic [LONG_INSTR_WIDTH - 1:0]           dec_raw_instr_ff   [0:WAYS_NUM - 1];
+logic [PC_WIDTH - 1:0]                   dec_bj_instr_pc_ff;
+logic [DATA_WIDTH - 1:0]                 dec_bj_imm_ff;
+logic                                    dec_branch_v_ff;
+logic                                    dec_jal_v_ff;
+logic                                    dec_jalr_v_ff;
+logic [WAY_PTR_WIDTH - 1:0]              dec_bj_ptr_ff;
+
+logic                                    dec_egr_window_pc_en;
+
+window_pc_t                              dec_window_pc_next;
+window_pc_t                              dec_window_pc_ff;
+
+
+////////////////////////////// INTERNAL SIGNALS ASSIGNMENT //////////////////////////////
+
+// TBD
+
+
+///////////////////////////////// REALLIGN INSTRUCTIONS /////////////////////////////////
+
+// count number of previous long instructions
+
+<$ for instr_dec in range(pipeline_width): $>
+assign long_instr_num_prev_</ instr_dec /> =
+<$   for instr_prev in range(instr_dec): $>
+                                             PREV_</ instr_dec />_NUM_WIDTH'(is_long_instr[</ instr_prev />]) +
+<$   end $>
+                                             PREV_</ instr_dec />_NUM_WIDTH'('0);
+
+<$ end $>
+
+// count offset for instructions allignment
+
+// offset are always consists of 16 bit instruction base
+// and additional 16 bits if instruction are long
+<$ for instr_dec in range(pipeline_width): $>
+assign instr_offset[</ instr_dec />] = 16 * </ instr_dec /> + 16 * long_instr_num_prev_</ instr_dec />;
+<$ end $>
+
+// allign instructions
+
+<$ for instr_dec in range(pipeline_width): $>
+assign realligned_instr[</ instr_dec />] = iq_instr_pack_i[instr_offset[</ instr_dec />] +: 32];
+<$ end $>
+
+// detect long instructions
+
+<$ for instr_dec in range(pipeline_width): $>
+assign is_long_instr[</ instr_dec />] = realligned_instr[</ instr_dec />][1:0] != 2'b11;
+<$ end $>
+
+
+////////////////////////////// INSTRUCTIONS PC CALCULATION //////////////////////////////
+
+// calculation PC for each instruction
+
+// PC for each instruction is a base PC and +2 or +4 bytes
+// depending on long or compressed instruction
+<$ for instr_dec in range(pipeline_width): $>
+assign instr_pc[</ instr_dec />] =
+<$   for instr_prev in range(instr_dec): $>
+                                   (is_long_instr[</ instr_prev />] ? PC_WIDTH'('d4) : PC_WIDTH'('d2)) +
+<$   end $>
+                                   iq_instr_pack_base_pc_i;
+
+<$ end $>
+
+// window PC assignment
+
+assign window_pc.base_pc           = iq_instr_pack_base_pc_i;
+assign window_pc.is_long_instr_vec = is_long_instr;
+
+
+/////////////////////////////// BRANCH AND JUMP DETECTION ///////////////////////////////
+
+// TBD
+
+
+////////////////////////////////// PROGRESSION CONTROL //////////////////////////////////
+
+// TBD
+
+
+//////////////////////////////////// EGRESS REGISTERS ///////////////////////////////////
+
+// TBD
+
+
+/////////////////////////////// OUTPUT SIGNALS ASSIGNMENT ///////////////////////////////
+
+// TBD
+
+
+<$ if assertions: $>
+/////////////////////////////////////// ASSERTIONS //////////////////////////////////////
+
+// TBD
+
+
+<$ end $>
+
+
+endmodule
