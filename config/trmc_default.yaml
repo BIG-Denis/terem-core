@@ -6,8 +6,12 @@
 module_id: teremcore
 
 
-# core commons
+# Core commons
 pipeline_width:  4
+
+# BP (branch predictor)
+bp_pc_hash_bits: 8
+
 
 
 # verification
