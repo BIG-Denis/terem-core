@@ -1,3 +1,4 @@
 src/</ module_id />_pkg.sv
 src/</ module_id />_decoder_way.sv
 src/</ module_id />_decoder.sv
+src/</ module_id />_reallign_unit.sv
