@@ -26,7 +26,28 @@ Supported extensions:
 
 * I (base extension)
 
-## Repository structure
+## Repository usage
+
+### Before you begin
+
+This project uses [KaravaiSV](https://github.com/BIG-Denis/karavaisv) powerful templating engine which is a python library.
+This project's Makefile also creates a virtual environment for building purposes.
+
+Make sure you installed [Python](https://www.python.org/) 3.13 or higher and [venv Python extension](https://docs.python.org/3/library/venv).
+
+### Makefile targets
+
+The makefile by default have following targets:
+
+* help      - show help message
+* init      - init repository and install dependencies
+* build     - build project with default config
+* lint      - lint builded project with verilator
+* lint-wall - lint builded project with verilator showing all warnings
+* clean     - clean files from previous build
+* clean-all - clean files from previous build and venv
+
+### Repository structure
 
 ```plain
 terem-core/
@@ -40,8 +61,7 @@ terem-core/
 ├── verif/                     # everything for verification
 ├── .gitignore                 # git file to ignore others
 ├── Makefile                   # makefile for project
-├── README.md                  # repository hello file (this one)
-└── requirements.txt           # required python packages
+└── README.md                  # repository hello file (this one)
 ```
 
 ## Additional information

@@ -1,0 +1,414 @@
+//
+// This file is a part of Terem Core project (https://github.com/BIG-Denis/terem-core).
+// This file generated via KaravaiSV templating engine (https://github.com/BIG-Denis/karavaisv).
+//
+// @author: BIG-Denis (https://github.com/BIG-Denis)
+// @description: Module that decodes machine code instructions into internal control signals
+//
+
+module </ module_id />_decoder
+import </ module_id />_pkg::*;
+#(
+  localparam int unsigned WAYS_NUM      = PIPELINE_WIDTH,
+  localparam int unsigned WAY_PTR_WIDTH = $clog2(WAYS_NUM)
+) (
+
+////////////////////////////// EXTERNAL SIGNALS DECLARATION /////////////////////////////
+
+  input  logic                          clk_i,
+  input  logic                          rstn_i,
+
+  // Pipeline
+  input  logic                          stall_i,
+  output logic                          stall_o,
+  input  logic                          flush_i,
+  output logic                          flush_o,
+
+  // RAU (Re-Allign Unit)
+  input  logic [WAYS_NUM - 1:0]         rau_raw_instr_v_i,
+  input  logic [LONG_INSTR_WIDTH - 1:0] rau_raw_instr_i [0:WAYS_NUM - 1],
+
+  input  window_pc_t                    rau_window_pc_i,  // propagation only
+
+  input  logic [PC_WIDTH - 1:0]         rau_bj_instr_pc_i,
+  input  logic [DATA_WIDTH - 1:0]       rau_bj_imm_i,
+  input  logic                          rau_branch_v_i,
+  input  logic                          rau_jal_v_i,
+  input  logic                          rau_jalr_v_i,
+  input  logic [WAY_PTR_WIDTH - 1:0]    rau_bj_ptr_i,
+
+  // BP (Branch Predictor)
+  input  logic                          bp_branch_taken_i,
+
+  // RAS (Return Address Stack)
+  output logic                          ras_pop_v_o,
+  output logic                          ras_push_v_o,
+  output logic [PC_WIDTH - 1:0]         ras_push_pc_o,
+
+  // IF (Instruction Fetcher)
+  output logic                          if_goto_ras_v_o,
+  output logic                          if_goto_v_o,
+  output logic [PC_WIDTH - 1:0]         if_goto_pc_o,
+
+  // RU (Rename Unit)
+  output logic [WAYS_NUM - 1:0]         ru_instr_v_o,
+  output dec_ctrls_t                    ru_dec_ctrls_o  [0:WAYS_NUM - 1],
+  output arch_regs_t                    ru_arch_regs_o  [0:WAYS_NUM - 1],
+  output exception_t                    ru_exception_o  [0:WAYS_NUM - 1],
+  output window_pc_t                    ru_window_pc_o
+);
+
+////////////////////////////// INTERNAL SIGNALS DECLARATION /////////////////////////////
+
+// Decoded results
+
+dec_ctrls_t            dec_ctrls             [0:WAYS_NUM - 1];
+arch_regs_t            arch_regs             [0:WAYS_NUM - 1];
+
+logic [WAYS_NUM - 1:0] illegal_instr;
+
+// Exceptions
+
+exception_t            exception             [0:WAYS_NUM - 1];
+
+// Pipeline
+
+logic                  flush;
+logic                  stall;
+
+// RAS
+
+logic                  goto_ras_v;
+logic                  goto_v;
+logic [PC_WIDTH - 1:0] target_pc;
+
+logic                  ras_pop;
+logic                  ras_push;
+
+// RU egress registers
+
+logic [WAYS_NUM - 1:0] ru_instr_v_egr_next;
+logic [WAYS_NUM - 1:0] ru_instr_v_egr_ff;
+
+logic [WAYS_NUM - 1:0] ru_egr_en;
+
+dec_ctrls_t            ru_dec_ctrls_egr_next [0:WAYS_NUM - 1];
+arch_regs_t            ru_arch_regs_egr_next [0:WAYS_NUM - 1];
+exception_t            ru_exception_egr_next [0:WAYS_NUM - 1];
+
+dec_ctrls_t            ru_dec_ctrls_egr_ff   [0:WAYS_NUM - 1];
+arch_regs_t            ru_arch_regs_egr_ff   [0:WAYS_NUM - 1];
+exception_t            ru_exception_egr_ff   [0:WAYS_NUM - 1];
+
+logic                  ru_window_pc_egr_en;
+window_pc_t            ru_window_pc_egr_ff;
+
+
+////////////////////////////// INTERNAL SIGNALS ASSIGNMENT //////////////////////////////
+
+// flush
+assign flush = goto_v | goto_ras_v;  // if any PC change
+
+// stall
+assign stall = // egress registers are free or
+               ~(|rau_raw_instr_v_i) |
+               // no incoming stall (guarantees further propagation)
+               ~stall_i;
+
+
+///////////////////////////////// DECODER WAY INSTANCES /////////////////////////////////
+
+<$ for way in range(pipeline_width): $>
+</ module_id />_decoder_way i_decoder_way_</ way /> (
+  .instr_i         (rau_raw_instr_i[</ way />]),
+  .predict_taken_i (bp_branch_taken_i),
+  .dec_ctrls_o     (dec_ctrls[</ way />]),
+  .arch_regs_o     (arch_regs[</ way />]),
+  .illegal_instr_o (illegal_instr[</ way />])
+);
+
+<$ end $>
+
+
+///////////////////////////////// TARGET PC CALCULATION /////////////////////////////////
+
+// goto calcilated PC
+assign goto_v = // if branch taken or
+                rau_branch_v_i & bp_branch_taken_i |
+                // if jal instruction
+                rau_jal_v_i;
+
+// goto PC from RAS top (pop)
+assign goto_ras_v = ras_pop;
+
+// target PC calculation
+assign target_pc = rau_bj_instr_pc_i + rau_bj_imm_i;
+
+// push logic
+assign ras_push = // do not make multiple pushes due to to stall or push
+                  ~(stall_i | flush_i) & (
+                    // jal to x1 or x5
+                    rau_jal_v_i  & (arch_regs[rau_bj_ptr_i].rd_addr inside {5'd1, 5'd5}) |
+                    // jalr to x1 or x5
+                    rau_jalr_v_i & (arch_regs[rau_bj_ptr_i].rd_addr inside {5'd1, 5'd5})
+                  );
+
+// pop logic
+assign ras_pop  = // do not make multiple pops due to to stall or push
+                  ~(stall_i | flush_i) & (
+                    // jalr to x1 or x5 and rs1 is x1 or x5
+                    (
+                      rau_jalr_v_i &
+                      (arch_regs[rau_bj_ptr_i].rd_addr  inside {5'd1, 5'd5}) &
+                      (arch_regs[rau_bj_ptr_i].rs1_addr inside {5'd1, 5'd5})
+                    ) |
+                    // jalr to not x1 or x5 and rs1 is x1 or x5
+                    (
+                      rau_jalr_v_i &
+                      ~(arch_regs[rau_bj_ptr_i].rd_addr  inside {5'd1, 5'd5}) &
+                       (arch_regs[rau_bj_ptr_i].rs1_addr inside {5'd1, 5'd5})
+                    )
+                  );
+
+
+/////////////////////////////////// EXCEPTION HANDLING //////////////////////////////////
+
+// cause
+<$ for way in range(pipeline_width): $>
+assign exception[</ way />].cause = ILLEGAL_INSTR;
+<$ end $>
+
+// validity
+<$ for way in range(pipeline_width): $>
+assign exception[</ way />].valid = illegal_instr[</ way />];
+<$ end $>
+
+
+//////////////////////////////////// EGRESS REGISTERS ///////////////////////////////////
+
+// valid
+
+assign ru_instr_v_egr_next = // invalidate when flush
+                             flush_i ? WAYS_NUM'('0)
+                             // do not change when incoming stall
+                           : stall_i ? ru_instr_v_egr_ff
+                             // othewise next value
+                           : rau_raw_instr_v_i;
+
+always_ff @(posedge clk_i) begin
+  if (~rstn_i) begin
+    ru_instr_v_egr_ff <= WAYS_NUM'('0);
+  end
+  else begin
+    ru_instr_v_egr_ff <= ru_instr_v_egr_next;
+  end
+end
+
+// payload
+
+assign ru_dec_ctrls_egr_next = dec_ctrls;
+assign ru_arch_regs_egr_next = arch_regs;
+assign ru_exception_egr_next = exception;
+
+assign ru_egr_en = rau_raw_instr_v_i &
+                   // do not update egresses value when stall or flush
+                   ~{WAYS_NUM{stall_i | flush_i}};
+
+<$ for way in range(pipeline_width): $>
+always_ff @(posedge clk_i) begin
+  if (ru_egr_en[</ way />]) begin
+    ru_dec_ctrls_egr_ff[</ way />] <= ru_dec_ctrls_egr_next[</ way />];
+    ru_arch_regs_egr_ff[</ way />] <= ru_arch_regs_egr_next[</ way />];
+    ru_exception_egr_ff[</ way />] <= ru_exception_egr_next[</ way />];
+  end
+end
+
+<$ end $>
+
+// window PC
+
+assign ru_window_pc_egr_en = |ru_egr_en;  // update PC window if any new instructions
+
+always_ff @(posedge clk_i) begin
+  if (ru_window_pc_egr_en) begin
+    ru_window_pc_egr_ff <= rau_window_pc_i;
+  end
+end
+
+
+////////////////////////////// EXTERNAL SIGNALS ASSIGNMENT //////////////////////////////
+
+// Pipeline
+assign flush_o         = flush;
+assign stall_o         = stall;
+
+// RAS (Return Address Stack)
+assign ras_pop_v_o     = ras_pop;
+assign ras_push_v_o    = ras_push;
+assign ras_push_pc_o   = target_pc;
+
+// IF (Instruction Fetcher)
+assign if_goto_ras_v_o = goto_ras_v;
+assign if_goto_v_o     = goto_v;
+assign if_goto_pc_o    = target_pc;
+
+// RU (Rename Unit)
+assign ru_instr_v_o    = ru_instr_v_egr_ff;
+assign ru_dec_ctrls_o  = ru_dec_ctrls_egr_ff;
+assign ru_arch_regs_o  = ru_arch_regs_egr_ff;
+assign ru_exception_o  = ru_exception_egr_ff;
+assign ru_window_pc_o  = ru_window_pc_egr_ff;
+
+
+<$ if assertions: $>
+/////////////////////////////////////// ASSERTIONS //////////////////////////////////////
+
+// Auxiliary signals
+
+logic verif_any_bj_instr;
+assign verif_any_bj_instr = rau_branch_v_i | rau_jal_v_i | rau_jalr_v_i;
+
+// Pipeline
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  !$isunknown(stall_i))
+  else $error("stall_i must be known!");
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  !$isunknown(stall_o))
+  else $error("stall_o must be known!");
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  !$isunknown(flush_i))
+  else $error("flush_i must be known!");
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  !$isunknown(flush_o))
+  else $error("flush_o must be known!");
+
+
+// RAU (Re-Allign Unit)
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  !$isunknown(rau_raw_instr_v_i))
+  else $error("rau_raw_instr_v_i must be known!");
+
+<$ for way in range(pipeline_width): $>
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  rau_raw_instr_v_i[</ way />] |-> !$isunknown(rau_window_pc_i.is_long_instr_vec[</ way />]))
+  else $error("rau_window_pc_i.is_long_instr_vec[</ way />] must be known when rau_raw_instr_v_i[</ way />] is high!");
+<$ end $>
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  (|rau_raw_instr_v_i) |-> !$isunknown(rau_window_pc_i.base_pc))
+  else $error("rau_window_pc_i.is_long_instr_vec must be known when any bit of rau_raw_instr_v_i is high!");
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  stall_o |=> $stable(rau_raw_instr_i))
+  else $error("rau_raw_instr_i must remain stable while stall_o is high!");
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  !$isunknown(rau_raw_instr_v_i))
+  else $error("rau_raw_instr_v_i must be known!");
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  !$isunknown(rau_branch_v_i))
+  else $error("rau_branch_v_i must be known!");
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  !$isunknown(rau_jal_v_i))
+  else $error("rau_jal_v_i must be known!");
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  !$isunknown(rau_jalr_v_i))
+  else $error("rau_jalr_v_i must be known!");
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  verif_any_bj_instr |-> !$isunknown(rau_bj_ptr_i))
+  else $error("rau_bj_ptr_i must be known when any BJ instruction is pending!");
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  verif_any_bj_instr |-> !$isunknown(rau_bj_instr_pc_i))
+  else $error("rau_bj_instr_pc_i must be known when any BJ instruction is pending!");
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  verif_any_bj_instr |-> !$isunknown(rau_bj_imm_i))
+  else $error("rau_bj_imm_i must be known when any BJ instruction!");
+
+
+// BP (Branch Predictor)
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  rau_branch_v_i |-> !$isunknown(bp_branch_taken_i))
+  else $error("bp_branch_taken_i must be known when rau_branch_v_i is high!");
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  stall_o |=> $stable(bp_branch_taken_i))
+  else $error("bp_branch_taken_i must remain stable while stall_o is high!");
+
+
+// RAS (Return Address Stack)
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  !$isunknown(ras_pop_v_o))
+  else $error("ras_pop_v_o must be known!");
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  !$isunknown(ras_push_v_o))
+  else $error("ras_push_v_o must be known!");
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  ras_push_v_o |-> !$isunknown(ras_push_pc_o))
+  else $error("ras_push_pc_o must be known when ras_push_v_o is high!");
+
+
+// IF (Instruction Fetcher)
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  !$isunknown(if_goto_ras_v_o))
+  else $error("if_goto_ras_v_o must be known!");
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  !$isunknown(if_goto_v_o))
+  else $error("if_goto_v_o must be known!");
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  if_goto_v_o |-> !$isunknown(if_goto_pc_o))
+  else $error("if_goto_pc_o must be known when if_goto_v_o is high!");
+
+
+// RU (Rename Unit)
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  !$isunknown(ru_instr_v_o))
+  else $error("ru_instr_v_o must be known!");
+
+// Everything else in RU output signals can contain x'es or just propogation
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  stall_i |=> $stable(ru_dec_ctrls_o))
+  else $error("ru_dec_ctrls_o must remain stable while stall_i is high!");
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  stall_i |=> $stable(ru_arch_regs_o))
+  else $error("ru_arch_regs_o must remain stable while stall_i is high!");
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  stall_i |=> $stable(ru_exception_o))
+  else $error("ru_exception_o must remain stable while stall_i is high!");
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  stall_i |=> $stable(ru_window_pc_o))
+  else $error("ru_window_pc_o must remain stable while stall_i is high!");
+
+
+// Internal signals
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  verif_any_bj_instr |-> (if_goto_ras_v_o | if_goto_v_o))
+  else $error("either if_goto_ras_v_o or if_goto_v_o must be high if any BJ instruction!");
+
+<$ end $>
+
+
+endmodule
