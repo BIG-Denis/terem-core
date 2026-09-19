@@ -17,6 +17,8 @@ import </ module_id />_pkg::*;
 
   output dec_ctrls_t                    dec_ctrls_o,
   output arch_regs_t                    arch_regs_o,
+
+  output logic                          blocking_instr_o,
   output logic                          illegal_instr_o
 );
 
@@ -38,7 +40,7 @@ localparam int unsigned SHAMT_BASE_WIDTH         = 5;
 
 ////////////////////////////// INTERNAL SIGNALS DECLARATION /////////////////////////////
 
-// architectural fields
+// Architectural fields
 
 logic [COMPR_INSTR_OPCODE_WIDTH - 1:0] compressed_instr_opcode;
 logic [ LONG_INSTR_OPCODE_WIDTH - 1:0] long_instr_opcode;
@@ -65,10 +67,12 @@ logic [ARCH_REG_ADDR_WIDTH - 1:0]      arch_rs1;
 logic [ARCH_REG_ADDR_WIDTH - 1:0]      arch_rs2;
 
 
-// internal usage
+// Internal usage
 
 dec_ctrls_t                            dec_ctrls;
 arch_regs_t                            arch_regs;
+
+logic                                  blocking_instr;
 
 logic                                  illegal_instr;
 
@@ -122,6 +126,8 @@ always_comb begin
         arch_regs.rs2_addr                     = arch_rs2;
         arch_regs.rd_addr                      = arch_rd;
         arch_regs.rd_need                      = |arch_rd;
+
+        blocking_instr                         = 1'b0;
 
         case(func3)
           3'h0: begin  // add/sub
@@ -227,6 +233,8 @@ always_comb begin
 
         dec_ctrls.pe_ctrls.imm                 = func3 inside {3'h1, 3'h5} ? shamt : imm_i;
 
+        blocking_instr                         = 1'b0;
+
         case (func3)
           3'h0: begin  // add
             dec_ctrls.pe_ctrls.int_alu.alu_opcode = ADD;
@@ -285,13 +293,15 @@ always_comb begin
 
       5'b00000: begin  // Load
 
-        dec_ctrls.pe_type              = DMEM_LOAD;
-        dec_ctrls.pe_ctrls.imm         = imm_i;
+        dec_ctrls.pe_type      = DMEM_LOAD;
+        dec_ctrls.pe_ctrls.imm = imm_i;
 
-        arch_regs.rs1_addr             = arch_rs1;
-        arch_regs.rs2_addr             = ARCH_REG_ADDR_WIDTH'('0);  // not used
-        arch_regs.rd_addr              = arch_rd;
-        arch_regs.rd_need              = |arch_rd;
+        arch_regs.rs1_addr     = arch_rs1;
+        arch_regs.rs2_addr     = ARCH_REG_ADDR_WIDTH'('0);  // not used
+        arch_regs.rd_addr      = arch_rd;
+        arch_regs.rd_need      = |arch_rd;
+
+        blocking_instr         = 1'b0;
 
         case (func3)
           3'h0: begin
@@ -323,13 +333,15 @@ always_comb begin
 
       5'b01000: begin  // Store
 
-        dec_ctrls.pe_type              = DMEM_STORE;
-        dec_ctrls.pe_ctrls.imm         = imm_s;
+        dec_ctrls.pe_type      = DMEM_STORE;
+        dec_ctrls.pe_ctrls.imm = imm_s;
 
-        arch_regs.rs1_addr             = arch_rs1;
-        arch_regs.rs2_addr             = arch_rs2;
-        arch_regs.rd_addr              = ARCH_REG_ADDR_WIDTH'('0);  // not used
-        arch_regs.rd_need              = 1'b0;
+        arch_regs.rs1_addr     = arch_rs1;
+        arch_regs.rs2_addr     = arch_rs2;
+        arch_regs.rd_addr      = ARCH_REG_ADDR_WIDTH'('0);  // not used
+        arch_regs.rd_need      = 1'b0;
+
+        blocking_instr         = 1'b0;
 
         case (func3)
           3'h0: begin
@@ -362,6 +374,8 @@ always_comb begin
         arch_regs.rs2_addr                      = arch_rs2;
         arch_regs.rd_addr                       = ARCH_REG_ADDR_WIDTH'('0);  // not used
         arch_regs.rd_need                       = 1'b0;
+
+        blocking_instr                          = 1'b0;
 
         case (func3)
           3'h0: begin
@@ -408,27 +422,33 @@ always_comb begin
 
         illegal_instr                        = 1'b0;
 
+        blocking_instr                       = 1'b0;
+
       end
 
       5'b11001: begin  // jalr
 
         if (func3 == 3'h0) begin
 
-          dec_ctrls.pe_type                      = BJ_ALU;
-          dec_ctrls.pe_ctrls.bj_alu.instr_type   = JALR;
-          dec_ctrls.pe_ctrls.imm                 = imm_i;
+          dec_ctrls.pe_type                    = BJ_ALU;
+          dec_ctrls.pe_ctrls.bj_alu.instr_type = JALR;
+          dec_ctrls.pe_ctrls.imm               = imm_i;
 
-          arch_regs.rs1_addr                     = arch_rs1;
-          arch_regs.rs2_addr                     = ARCH_REG_ADDR_WIDTH'('0);  // not used
-          arch_regs.rd_addr                      = arch_rd;
-          arch_regs.rd_need                      = |arch_rd;
+          arch_regs.rs1_addr                   = arch_rs1;
+          arch_regs.rs2_addr                   = ARCH_REG_ADDR_WIDTH'('0);  // not used
+          arch_regs.rd_addr                    = arch_rd;
+          arch_regs.rd_need                    = |arch_rd;
 
-          illegal_instr                          = 1'b0;
+          illegal_instr                        = 1'b0;
+
+          blocking_instr                       = 1'b0;
 
         end
         else begin
 
-          illegal_instr                          = 1'b1;
+          illegal_instr                        = 1'b1;
+
+          blocking_instr                       = 1'b0;
 
         end
 
@@ -449,6 +469,8 @@ always_comb begin
 
         illegal_instr                          = 1'b0;
 
+        blocking_instr                         = 1'b0;
+
       end
 
       5'b00101: begin  // auipc
@@ -462,15 +484,16 @@ always_comb begin
         arch_regs.rd_addr                    = arch_rd;
         arch_regs.rd_need                    = |arch_rd;
 
-
         illegal_instr                        = 1'b0;
+
+        blocking_instr                       = 1'b0;
 
       end
 
       5'b00011: begin  // fence
 
         //! TODO: Encode as a real fence after implementing cache
-        // For now NOP - x0 = x0 + x0
+        // For now NOP: x0 = x0 + x0
 
         dec_ctrls.pe_type                      = INT_ALU;
         dec_ctrls.pe_ctrls.int_alu.alu_opcode  = ADD;
@@ -483,12 +506,14 @@ always_comb begin
 
         illegal_instr                          = 1'b0;
 
+        blocking_instr                         = 1'b0;
+
       end
 
       5'b11100: begin  // ecall/ebreak/mret/wfi/csr etc.
 
         //! TODO: Support later
-        // For now NOP - x0 = x0 + 0 and assert illegal_instr
+        // For now NOP: x0 = x0 + 0 and assert illegal_instr
 
         dec_ctrls.pe_type                      = INT_ALU;
         dec_ctrls.pe_ctrls.int_alu.alu_opcode  = ADD;
@@ -501,11 +526,15 @@ always_comb begin
 
         illegal_instr                          = 1'b1;
 
+        blocking_instr                         = 1'b1;
+
       end
 
       default: begin  // default - illegal instruction
 
-        illegal_instr = 1'b1;
+        illegal_instr  = 1'b1;
+
+        blocking_instr = 1'b0;
 
       end
 
@@ -514,8 +543,10 @@ always_comb begin
   end
   else begin  // compressed instructions
 
-    illegal_instr = 1'b1;
+    illegal_instr  = 1'b1;
     // TBD: C extension
+
+    blocking_instr = 1'b0;
 
   end
 
@@ -526,6 +557,8 @@ end
 
 assign dec_ctrls_o       = dec_ctrls;
 assign arch_regs_o       = arch_regs;
+
+assign blocking_instr_o  = blocking_instr;
 
 assign illegal_instr_o   = illegal_instr;
 
