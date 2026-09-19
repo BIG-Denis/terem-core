@@ -9,6 +9,8 @@
 module </ module_id />_reallign_unit
 import </ module_id />_pkg::*;
 #(
+  parameter  int unsigned RESET_PC      = unsigned'(int'('0));
+
   localparam int unsigned WAYS_NUM      = PIPELINE_WIDTH,
   localparam int unsigned WAY_PTR_WIDTH = $clog2(WAYS_NUM)
 ) (
@@ -25,14 +27,20 @@ import </ module_id />_pkg::*;
   // IQ (Instruction Queue)
   input  logic                             iq_instr_pack_v_i,
   input  logic [IQ_INSTR_PACK_WIDTH - 1:0] iq_instr_pack_i,
-  input  logic [PC_WIDTH - 1:0]            iq_instr_pack_base_pc_i,
-  output logic [IQ_READ_ACK_WIDTH - 1:0]   iq_instr_pack_read_v_o,
+  output logic [IQ_READ_WIDTH - 1:0]       iq_instr_pack_read_v_o,
 
   // BP (Branch Predictor)
   output logic                             bp_predict_v_o,
   output logic [BP_HASH_BITS_NUM - 1:0]    bp_predict_hash_o,
 
+  // RAS (Return Address Stack)
+  input  logic [PC_WIDTH - 1:0]            ras_return_pc_i,
+
   // DEC (Decoder)
+  input  logic                             dec_goto_ras_v_i,
+  input  logic                             dec_goto_v_i,
+  input  logic [PC_WIDTH - 1:0]            dec_pc_i,
+
   output logic [WAYS_NUM - 1:0]            dec_raw_instr_v_o,
   output logic [LONG_INSTR_WIDTH - 1:0]    dec_raw_instr_o [0:WAYS_NUM - 1],
 
@@ -49,14 +57,16 @@ import </ module_id />_pkg::*;
 ///////////////////////////// INTERNAL CONSTANTS DECLARATION ////////////////////////////
 
 // Previous instructions counters widths
-
 <$ for instr in range(pipeline_width): $>
 localparam int unsigned PREV_</ instr />_NUM_WIDTH = $clog2(</ instr /> + 1);
 <$ end $>
 
 // Instruction offset width
-
 localparam int unsigned INSTR_OFFSET_WIDTH         = $clog2(IQ_INSTR_PACK_WIDTH);
+
+// PC increment width
+//   increment width is a 4 bytes per instruction * instruction num per window
+localparam int unsigned PC_INCR_WIDTH              = $clog2(PIPELINE_WIDTH * 4)
 
 ////////////////////////////// INTERNAL SIGNALS DECLARATION /////////////////////////////
 
@@ -72,6 +82,12 @@ logic [INSTR_OFFSET_WIDTH - 1:0]         instr_offset       [0:WAYS_NUM - 1];
 logic [LONG_INSTR_WIDTH - 1:0]           realligned_instr   [0:WAYS_NUM - 1];
 
 // instructions PC
+
+logic [PC_INCR_WIDTH - 1:0]              base_pc_incr;
+
+logic                                    base_pc_en;
+logic [PC_WIDTH - 1:0]                   base_pc_next;
+logic [PC_WIDTH - 1:0]                   base_pc_ff;
 
 logic [PC_WIDTH - 1:0]                   instr_pc           [0:WAYS_NUM - 1];
 
@@ -152,6 +168,42 @@ assign is_long_instr[</ instr_dec />] = realligned_instr[</ instr_dec />][1:0] !
 <$ end $>
 
 
+//////////////////////////////// PROGRAM COUNTER HANDLING ///////////////////////////////
+
+// PC incrememt per processing registers
+
+assign base_pc_incr =
+<$ for instr in range(pipeline_width): $>
+                      is_long_instr ? PC_INCR_WIDTH'('h4) : PC_INCR_WIDTH'('h2) +
+<$ end $>
+                      PC_INCR_WIDTH'('0);
+
+// program counter
+
+assign base_pc_next = // goto calculated PC from decode stage (jump or RAS push)
+                      dec_goto_v_i     ? dec_pc_i
+                      // goto RAS top (RAS pop)
+                    : dec_goto_ras_v_i ? ras_return_pc_i
+                      // increment PC for read instruction
+                    : base_pc_ff + PC_WIDTH'(base_pc_incr);
+
+assign base_pc_en = // goto some PC
+                    dec_goto_v_i | dec_goto_ras_v_i |
+                    // new instructions (PC increment)
+                    iq_instr_pack_v_i & stall_i;
+
+always_ff @(posedge clk_i or negedge rstn_i) begin
+  if (~rstn_i) begin
+    base_pc_ff <= RESET_PC;
+  end
+  else begin
+    if (base_pc_en) begin
+      base_pc_ff <= base_pc_next;
+    end
+  end
+end
+
+
 ////////////////////////////// INSTRUCTIONS PC CALCULATION //////////////////////////////
 
 // calculation PC for each instruction
@@ -163,13 +215,13 @@ assign instr_pc[</ instr_dec />] =
 <$   for instr_prev in range(instr_dec): $>
                                    (is_long_instr[</ instr_prev />] ? PC_WIDTH'('d4) : PC_WIDTH'('d2)) +
 <$   end $>
-                                   iq_instr_pack_base_pc_i;
+                                   base_pc_ff;
 
 <$ end $>
 
 // window PC assignment
 
-assign window_pc.base_pc           = iq_instr_pack_base_pc_i;
+assign window_pc.base_pc           = base_pc_ff;
 assign window_pc.is_long_instr_vec = is_long_instr;
 
 
@@ -179,6 +231,8 @@ assign window_pc.is_long_instr_vec = is_long_instr;
 
 
 ////////////////////////////////// PROGRESSION CONTROL //////////////////////////////////
+
+// TODO: one jump and one branch per window
 
 // TBD
 
