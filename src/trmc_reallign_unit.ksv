@@ -95,10 +95,20 @@ window_pc_t                              window_pc;
 
 // Branch and jump detection
 
+logic [WAYS_NUM - 1:0]                   is_branch_vec;
+logic [WAYS_NUM - 1:0]                   is_jal_vec;
+logic [WAYS_NUM - 1:0]                   is_jalr_vec;
+
 logic                                    is_branch_v;
 logic                                    is_jal_v;
 logic                                    is_jalr_v;
 logic [WAY_PTR_WIDTH - 1:0]              bj_instr_ptr;
+
+logic [WAYS_NUM - 1:0]                   is_pending_bj_instr;
+
+logic                                    bj_processed_en;
+logic [WAYS_NUM - 1:0]                   bj_processed_next;
+logic [WAYS_NUM - 1:0]                   bj_processed_ff;
 
 // DEC egress registers
 
@@ -227,7 +237,41 @@ assign window_pc.is_long_instr_vec = is_long_instr;
 
 /////////////////////////////// BRANCH AND JUMP DETECTION ///////////////////////////////
 
-// TBD
+// find BJ instructions
+
+<$ for instr_dec in range(pipeline_width): $>
+// instruction </ instr_dec />
+assign is_branch_vec[</ instr_dec />] = (realligned_instr[6:0] == 7'b1100011);  // branch
+assign is_jal_vec   [</ instr_dec />] = (realligned_instr[6:0] == 7'b1101111);  // jal
+assign is_jalr_vec  [</ instr_dec />] = (realligned_instr[6:0] == 7'b1100111);  // jalr
+
+<$ end $>
+
+// any BJ instructuions vector
+
+assign is_pending_bj_instr = (is_branch_vec | is_jal_vec | is_jalr_vec) & ~bj_processed_ff;
+
+// find first BJ entry
+
+always_comb begin
+  priority case (1'b1)
+<$ for instr_dec in range(pipeline_width): $>
+    is_pending_bj_instr[</ instr_dec />]: begin
+      bj_instr_ptr = WAY_PTR_WIDTH'(</ instr_dec />);
+      is_branch_v  = is_branch_vec[</ instr_dec />];
+      is_jal_v     = is_jal_vec   [</ instr_dec />];
+      is_jalr_v    = is_jalr_vec  [</ instr_dec />];
+    end
+
+<$ end $>
+    default: begin
+      bj_instr_ptr = WAY_PTR_WIDTH'('x);
+      is_branch_v  = 1'b0;
+      is_jal_v     = 1'b0;
+      is_jalr_v    = 1'b0;
+    end
+  endcase
+end
 
 
 ////////////////////////////////// PROGRESSION CONTROL //////////////////////////////////
