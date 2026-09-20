@@ -64,7 +64,7 @@ import </ module_id />_pkg::*;
 
 // Previous instructions counters widths
 <$ for instr in range(pipeline_width): $>
-localparam int unsigned PREV_</ instr />_NUM_WIDTH = $clog2(</ instr /> + 1);
+localparam int unsigned PREV_</ instr />_NUM_WIDTH = $clog2(</ max(1, instr) /> + 1);
 <$ end $>
 
 // Instruction offset width
@@ -82,7 +82,7 @@ localparam int unsigned BP_HASH_BIT_MSB            = BP_HASH_BIT_LSB + BP_HASH_B
 
 // Reallign instructions
 
-logic [WAYS_NUM - 1:0]                   is_long_instr;
+logic                                    is_long_instr            [0:WAYS_NUM - 1];
 
 <$ for instr in range(pipeline_width): $>
 logic [PREV_</ instr />_NUM_WIDTH - 1:0] long_instr_num_prev_</ instr />;
@@ -123,7 +123,7 @@ logic [WAY_PTR_WIDTH - 1:0]              branch_instr_ovfl_ptr;
 logic [WAYS_NUM - 1:0]                   is_pending_jump_instr;
 logic [WAYS_NUM - 1:0]                   is_pending_branch_instr;
 
-logic [BP_HASH_BITS_NUM - 1:0]           branch_pc_hash;
+logic [BP_HASH_BITS_NUM - 1:0]           branch_pc_hash           [0:BP_WAYS_NUM - 1];
 
 logic [BRANCH_IMM_BASE_WIDTH - 1:0]      branch_imm_base          [0:BP_WAYS_NUM - 1];
 logic [JAL_IMM_BASE_WIDTH - 1:0]         jal_imm_base;
@@ -142,7 +142,7 @@ logic [WAYS_NUM - 1:0]                   processed_next;
 logic [WAYS_NUM - 1:0]                   processed_ff;
 
 logic [IQ_READ_WIDTH - 1:0]              iq_halfword_read_num;
-logic                                    iq_read_num;
+logic [IQ_READ_WIDTH - 1:0]              iq_read_num;
 
 // DEC egress registers
 
@@ -232,7 +232,7 @@ assign is_long_instr[</ instr_dec />] = realligned_instr[</ instr_dec />][1:0] =
 
 assign base_pc_incr =
 <$ for instr in range(pipeline_width): $>
-                      is_long_instr ? PC_INCR_WIDTH'('h4) : PC_INCR_WIDTH'('h2) +
+                      (is_long_instr[</ instr />] ? PC_INCR_WIDTH'('h4) : PC_INCR_WIDTH'('h2)) +
 <$ end $>
                       PC_INCR_WIDTH'('0);
 
@@ -279,8 +279,10 @@ assign instr_pc[</ instr_dec />] =
 
 // window PC assignment
 
-assign window_pc.base_pc           = base_pc_ff;
-assign window_pc.is_long_instr_vec = is_long_instr;
+assign window_pc.base_pc                        = base_pc_ff;
+<$ for instr in range(pipeline_width): $>
+assign window_pc.is_long_instr_vec[</ instr />] = is_long_instr[</ instr />];
+<$ end $>
 
 
 /////////////////////////////// BRANCH AND JUMP DETECTION ///////////////////////////////
@@ -289,9 +291,9 @@ assign window_pc.is_long_instr_vec = is_long_instr;
 
 <$ for instr_dec in range(pipeline_width): $>
 //   instruction </ instr_dec />
-assign is_branch_vec[</ instr_dec />] = (realligned_instr[6:0] == 7'b1100011);  // branch
-assign is_jal_vec   [</ instr_dec />] = (realligned_instr[6:0] == 7'b1101111);  // jal
-assign is_jalr_vec  [</ instr_dec />] = (realligned_instr[6:0] == 7'b1100111);  // jalr
+assign is_branch_vec[</ instr_dec />] = (realligned_instr[</ instr_dec />][6:0] == 7'b1100011);  // branch
+assign is_jal_vec   [</ instr_dec />] = (realligned_instr[</ instr_dec />][6:0] == 7'b1101111);  // jal
+assign is_jalr_vec  [</ instr_dec />] = (realligned_instr[</ instr_dec />][6:0] == 7'b1100111);  // jalr
 
 <$ end $>
 
@@ -390,8 +392,8 @@ assign jal_imm_base = {realligned_instr[jump_instr_ptr][31],
 assign jalr_imm_base = realligned_instr[jump_instr_ptr][31:20];
 
 // jump
-assign jump_imm_base = is_jal_vec ? JUMP_IMM_BASE_WIDTH'(jal_imm_base)
-                                  : JUMP_IMM_BASE_WIDTH'(jalr_imm_base);
+assign jump_imm_base = is_jal_vec[jump_instr_ptr] ? JUMP_IMM_BASE_WIDTH'(jal_imm_base)
+                                                  : JUMP_IMM_BASE_WIDTH'(jalr_imm_base);
 
 
 ////////////////////////////////// PROGRESSION CONTROL //////////////////////////////////
@@ -449,7 +451,7 @@ end
 // and 2 per long instruction
 assign iq_halfword_read_num =
 <$ for instr in range(pipeline_width): $>
-                              is_long_instr ? IQ_READ_WIDTH'('h2) : IQ_READ_WIDTH'('h1) +
+                              (is_long_instr[</ instr />] ? IQ_READ_WIDTH'('h2) : IQ_READ_WIDTH'('h1)) +
 <$ end $>
                               IQ_READ_WIDTH'('0);
 
@@ -537,7 +539,7 @@ assign dec_branch_ptr_next     [</ branch />] = branch_instr_ptr[</ branch />];
 
 <$ end $>
 
-<$ for way in range(pipeline_width): $>
+<$ for way in range(bp_ways_num): $>
 always_ff @(posedge clk_i) begin
   if (dec_branch_pc_imm_en[</ way />]) begin
     dec_branch_instr_pc_ff[</ way />] <= dec_branch_instr_pc_next[</ way />];
