@@ -141,6 +141,9 @@ logic                                    processed_en;
 logic [WAYS_NUM - 1:0]                   processed_next;
 logic [WAYS_NUM - 1:0]                   processed_ff;
 
+logic [IQ_READ_WIDTH - 1:0]              iq_halfword_read_num;
+logic                                    iq_read_num;
+
 // DEC egress registers
 
 //   valid
@@ -437,11 +440,24 @@ always_ff @(posedge clk_i or negedge rstn_i) begin
     if (processed_en) begin
       processed_ff <= processed_next;
     end
+  end
 end
 
 // read from IQ control
 
-// TBD
+// number of read halfwords, 1 per compressed instruction
+// and 2 per long instruction
+assign iq_halfword_read_num =
+<$ for instr in range(pipeline_width): $>
+                              is_long_instr ? IQ_READ_WIDTH'('h2) : IQ_READ_WIDTH'('h1) +
+<$ end $>
+                              IQ_READ_WIDTH'('0);
+
+assign iq_read_num = (iq_instr_pack_v_i & all_instructions_processed)
+                       // number of 2-bytes read words if all instructuions processed
+                       ? iq_halfword_read_num
+                       // otherwize no reads are countered
+                       : IQ_READ_WIDTH'('0);
 
 
 //////////////////////////////////// EGRESS REGISTERS ///////////////////////////////////
@@ -451,7 +467,7 @@ end
 // to-be-send instructions all except for already processed
 assign dec_raw_instr_v_next = {WAYS_NUM{iq_instr_pack_v_i}} & ~processed_ff;
 
-always_ff @(posedge clk or negedge rstn_i) begin
+always_ff @(posedge clk_i or negedge rstn_i) begin
   if (~rstn_i) begin
     dec_raw_instr_v_ff <= WAYS_NUM'('0);
   end
@@ -551,7 +567,7 @@ end
 /////////////////////////////// OUTPUT SIGNALS ASSIGNMENT ///////////////////////////////
 
 // IQ (Instruction Queue)
-assign iq_instr_pack_read_v_o =
+assign iq_instr_pack_read_v_o = iq_read_num;
 
 // BP (Branch Predictor)
 assign bp_predict_v_o         = is_branch_v;
@@ -624,6 +640,10 @@ assert property (@(posedge clk_i) disable iff (!rstn_i)
 assert property (@(posedge clk_i) disable iff (!rstn_i)
   !$isunknown(iq_instr_pack_read_v_o))
   else $error("iq_instr_pack_read_v_o must be known!");
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  !iq_instr_pack_v_i |-> (iq_instr_pack_read_v_o == IQ_READ_WIDTH'('0)))
+  else $error("iq_instr_pack_read_v_o must be set to zero when iq_instr_pack_v_i is low!");
 
 // BP (Branch Predictor)
 
