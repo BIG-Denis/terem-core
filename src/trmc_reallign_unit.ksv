@@ -82,7 +82,7 @@ localparam int unsigned BP_HASH_BIT_MSB            = BP_HASH_BIT_LSB + BP_HASH_B
 
 // Reallign instructions
 
-logic                                    is_long_instr            [0:WAYS_NUM - 1];
+logic [WAYS_NUM - 1:0]                   is_long_instr;
 
 <$ for instr in range(pipeline_width): $>
 logic [PREV_</ instr />_NUM_WIDTH - 1:0] long_instr_num_prev_</ instr />;
@@ -279,10 +279,8 @@ assign instr_pc[</ instr_dec />] =
 
 // window PC assignment
 
-assign window_pc.base_pc                        = base_pc_ff;
-<$ for instr in range(pipeline_width): $>
-assign window_pc.is_long_instr_vec[</ instr />] = is_long_instr[</ instr />];
-<$ end $>
+assign window_pc.base_pc           = base_pc_ff;
+assign window_pc.is_long_instr_vec = is_long_instr;
 
 
 /////////////////////////////// BRANCH AND JUMP DETECTION ///////////////////////////////
