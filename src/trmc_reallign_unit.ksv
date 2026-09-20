@@ -187,11 +187,6 @@ window_pc_t                              dec_window_pc_next;
 window_pc_t                              dec_window_pc_ff;
 
 
-////////////////////////////// INTERNAL SIGNALS ASSIGNMENT //////////////////////////////
-
-// TBD
-
-
 ///////////////////////////////// REALLIGN INSTRUCTIONS /////////////////////////////////
 
 // count number of previous long instructions
