@@ -702,6 +702,24 @@ assert property (@(posedge clk_i) disable iff (!rstn_i)
   !$isunknown(base_pc_ff))
   else $error("base_pc_ff must be known!");
 
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  ($countones(is_branch_vec) <= BP_WAYS_NUM) |-> !branch_ovfl_v)
+  else $error("branch_ovfl_v cannot be asserted when is_branch_vec is less or equal to BP_WAYS_NUM!");
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  is_jump_v |-> !$isunknown(jump_instr_ptr))
+  else $error("jump_instr_ptr must be known when is_jump_v is high!");
+
+<$   for branch in range(bp_ways_num): $>
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  is_branch_v[</ branch />] |-> !$isunknown(branch_instr_ptr[</ branch />]))
+  else $error("branch_instr_ptr[</ branch />] must be known when is_branch_v[</ branch />] is high!");
+<$   end $>
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  branch_ovfl_v |-> !$isunknown(branch_instr_ovfl_ptr))
+  else $error("branch_instr_ovfl_ptr must be known when branch_ovfl_v is high!");
+
 <$ end $>
 
 
