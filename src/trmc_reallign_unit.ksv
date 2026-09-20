@@ -9,7 +9,7 @@
 module </ module_id />_reallign_unit
 import </ module_id />_pkg::*;
 #(
-  parameter  int unsigned RESET_PC      = unsigned'(int'('0));
+  parameter  int unsigned RESET_PC      = unsigned'(int'('0)),
 
   localparam int unsigned WAYS_NUM      = PIPELINE_WIDTH,
   localparam int unsigned WAY_PTR_WIDTH = $clog2(WAYS_NUM)
@@ -17,54 +17,47 @@ import </ module_id />_pkg::*;
 
 ////////////////////////////// EXTERNAL SIGNALS DECLARATION /////////////////////////////
 
-  input  logic                             clk_i,
-  input  logic                             rstn_i,
+  input  logic                               clk_i,
+  input  logic                               rstn_i,
 
   // Pipeline
-  input  logic                             stall_i,
-  input  logic                             flush_i,
+  input  logic                               stall_i,
+  input  logic                               flush_i,
 
   // IQ (Instruction Queue)
-  input  logic                             iq_instr_pack_v_i,
-  input  logic [IQ_INSTR_PACK_WIDTH - 1:0] iq_instr_pack_i,
-  output logic [IQ_READ_WIDTH - 1:0]       iq_instr_pack_read_v_o,
+  input  logic                               iq_instr_pack_v_i,
+  input  logic [IQ_INSTR_PACK_WIDTH - 1:0]   iq_instr_pack_i,
+  output logic [IQ_READ_WIDTH - 1:0]         iq_instr_pack_read_v_o,
 
   // BP (Branch Predictor)
-  output logic [BP_WAYS_NUM - 1:0]         bp_predict_v_o,
-  output logic [BP_HASH_BITS_NUM - 1:0]    bp_predict_hash_o     [0:BP_WAYS_NUM - 1],
+  output logic [BP_WAYS_NUM - 1:0]           bp_predict_v_o,
+  output logic [BP_HASH_BITS_NUM - 1:0]      bp_predict_hash_o     [0:BP_WAYS_NUM - 1],
 
   // RAS (Return Address Stack)
-  input  logic [PC_WIDTH - 1:0]            ras_return_pc_i,
+  input  logic [PC_WIDTH - 1:0]              ras_return_pc_i,
 
   // DEC (Decoder)
-  input  logic                             dec_goto_ras_v_i,
-  input  logic                             dec_goto_v_i,
-  input  logic [PC_WIDTH - 1:0]            dec_pc_i,
+  input  logic                               dec_goto_ras_v_i,
+  input  logic                               dec_goto_v_i,
+  input  logic [PC_WIDTH - 1:0]              dec_pc_i,
 
-  output logic [WAYS_NUM - 1:0]            dec_raw_instr_v_o,
-  output logic [LONG_INSTR_WIDTH - 1:0]    dec_raw_instr_o       [0:WAYS_NUM - 1],
+  output logic [WAYS_NUM - 1:0]              dec_raw_instr_v_o,
+  output logic [LONG_INSTR_WIDTH - 1:0]      dec_raw_instr_o       [0:WAYS_NUM - 1],
 
-  output window_pc_t                       dec_window_pc_o,
+  output window_pc_t                         dec_window_pc_o,
 
-  output logic [PC_WIDTH - 1:0]            dec_jump_instr_pc_o,
-  output logic [PC_WIDTH - 1:0]            dec_branch_instr_pc_o [0:BP_WAYS_NUM - 1],
+  output logic [PC_WIDTH - 1:0]              dec_jump_instr_pc_o,
+  output logic [PC_WIDTH - 1:0]              dec_branch_instr_pc_o [0:BP_WAYS_NUM - 1],
 
-  output logic [DATA_WIDTH - 1:0]          dec_jump_imm_base_o,
-  output logic [DATA_WIDTH - 1:0]          dec_branch_imm_base_o [0:BP_WAYS_NUM - 1],
+  output logic [JUMP_IMM_BASE_WIDTH - 1:0]   dec_jump_imm_base_o,
+  output logic [BRANCH_IMM_BASE_WIDTH - 1:0] dec_branch_imm_base_o [0:BP_WAYS_NUM - 1],
 
-  output logic                             dec_jal_v_o,
-  output logic                             dec_jalr_v_o,
-  output logic [WAY_PTR_WIDTH - 1:0]       dec_jump_ptr_o,
+  output logic                               dec_jal_v_o,
+  output logic                               dec_jalr_v_o,
+  output logic [WAY_PTR_WIDTH - 1:0]         dec_jump_ptr_o,
 
-  output logic [BP_WAYS_NUM - 1:0]         dec_branch_v_o,
-  output logic [WAY_PTR_WIDTH - 1:0]       dec_branch_ptr_o
-
-  // output logic [PC_WIDTH - 1:0]            dec_bj_instr_pc_o,
-  // output logic [DATA_WIDTH - 1:0]          dec_bj_imm_o,
-  // output logic                             dec_branch_v_o,
-  // output logic                             dec_jal_v_o,
-  // output logic                             dec_jalr_v_o,
-  // output logic [WAY_PTR_WIDTH - 1:0]       dec_bj_ptr_o
+  output logic [BP_WAYS_NUM - 1:0]           dec_branch_v_o,
+  output logic [WAY_PTR_WIDTH - 1:0]         dec_branch_ptr_o
 );
 
 ///////////////////////////// INTERNAL CONSTANTS DECLARATION ////////////////////////////
@@ -79,7 +72,7 @@ localparam int unsigned INSTR_OFFSET_WIDTH         = $clog2(IQ_INSTR_PACK_WIDTH)
 
 // PC increment width
 //   increment width is a 4 bytes per instruction * instruction num per window
-localparam int unsigned PC_INCR_WIDTH              = $clog2(PIPELINE_WIDTH * 4)
+localparam int unsigned PC_INCR_WIDTH              = $clog2(PIPELINE_WIDTH * 4);
 
 // BP bits range
 localparam int unsigned BP_HASH_BIT_LSB            = 2;  //! TODO: change to 1 after implementing C extension
@@ -95,8 +88,8 @@ logic [WAYS_NUM - 1:0]                   is_long_instr;
 logic [PREV_</ instr />_NUM_WIDTH - 1:0] long_instr_num_prev_</ instr />;
 <$ end $>
 
-logic [INSTR_OFFSET_WIDTH - 1:0]         instr_offset       [0:WAYS_NUM - 1];
-logic [LONG_INSTR_WIDTH - 1:0]           realligned_instr   [0:WAYS_NUM - 1];
+logic [INSTR_OFFSET_WIDTH - 1:0]         instr_offset             [0:WAYS_NUM - 1];
+logic [LONG_INSTR_WIDTH - 1:0]           realligned_instr         [0:WAYS_NUM - 1];
 
 // instructions PC
 
@@ -106,7 +99,7 @@ logic                                    base_pc_en;
 logic [PC_WIDTH - 1:0]                   base_pc_next;
 logic [PC_WIDTH - 1:0]                   base_pc_ff;
 
-logic [PC_WIDTH - 1:0]                   instr_pc           [0:WAYS_NUM - 1];
+logic [PC_WIDTH - 1:0]                   instr_pc                 [0:WAYS_NUM - 1];
 
 window_pc_t                              window_pc;
 
@@ -119,48 +112,74 @@ logic [WAYS_NUM - 1:0]                   is_jalr_vec;
 logic [BP_WAYS_NUM - 1:0]                is_branch_v;
 logic                                    is_jal_v;
 logic                                    is_jalr_v;
+logic                                    is_jump_v;
 
 logic [WAY_PTR_WIDTH - 1:0]              jump_instr_ptr;
-logic [WAY_PTR_WIDTH - 1:0]              branch_instr_ptr   [0:BP_WAYS_NUM - 1];
+logic [WAY_PTR_WIDTH - 1:0]              branch_instr_ptr         [0:BP_WAYS_NUM - 1];
+
+logic                                    branch_ovfl_v;
+logic [WAY_PTR_WIDTH - 1:0]              branch_instr_ovfl_ptr;
 
 logic [WAYS_NUM - 1:0]                   is_pending_jump_instr;
 logic [WAYS_NUM - 1:0]                   is_pending_branch_instr;
 
-logic [BP_HASH_BITS_NUM]                 branch_pc_hash;
+logic [BP_HASH_BITS_NUM - 1:0]           branch_pc_hash;
+
+logic [BRANCH_IMM_BASE_WIDTH - 1:0]      branch_imm_base          [0:BP_WAYS_NUM - 1];
+logic [JAL_IMM_BASE_WIDTH - 1:0]         jal_imm_base;
+logic [JALR_IMM_BASE_WIDTH - 1:0]        jalr_imm_base;
+logic [JUMP_IMM_BASE_WIDTH - 1:0]        jump_imm_base;
 
 // Forward progression
+
+logic [WAYS_NUM - 1:0]                   processing_before_branch;
+logic [WAYS_NUM - 1:0]                   processing_before_jump;
+
+logic                                    all_instructions_processed;
 
 logic                                    processed_en;
 logic [WAYS_NUM - 1:0]                   processed_next;
 logic [WAYS_NUM - 1:0]                   processed_ff;
 
-
-
 // DEC egress registers
 
+//   valid
 logic [WAYS_NUM - 1:0]                   dec_raw_instr_v_next;
 logic [WAYS_NUM - 1:0]                   dec_raw_instr_v_ff;
 
-logic [WAYS_NUM - 1:0]                   dec_egr_en;
+//   raw instructions
+logic [WAYS_NUM - 1:0]                   dec_raw_instr_en;
+logic [LONG_INSTR_WIDTH - 1:0]           dec_raw_instr_next       [0:WAYS_NUM - 1];
+logic [LONG_INSTR_WIDTH - 1:0]           dec_raw_instr_ff         [0:WAYS_NUM - 1];
 
-logic [LONG_INSTR_WIDTH - 1:0]           dec_raw_instr_next [0:WAYS_NUM - 1];
-logic [PC_WIDTH - 1:0]                   dec_bj_instr_pc_next;
-logic [DATA_WIDTH - 1:0]                 dec_bj_imm_next;
-logic                                    dec_branch_v_next;
+//   control and flag signals
 logic                                    dec_jal_v_next;
 logic                                    dec_jalr_v_next;
-logic [WAY_PTR_WIDTH - 1:0]              dec_bj_ptr_next;
-
-logic [LONG_INSTR_WIDTH - 1:0]           dec_raw_instr_ff   [0:WAYS_NUM - 1];
-logic [PC_WIDTH - 1:0]                   dec_bj_instr_pc_ff;
-logic [DATA_WIDTH - 1:0]                 dec_bj_imm_ff;
-logic                                    dec_branch_v_ff;
+logic [BP_WAYS_NUM - 1:0]                dec_branch_v_next;
 logic                                    dec_jal_v_ff;
 logic                                    dec_jalr_v_ff;
-logic [WAY_PTR_WIDTH - 1:0]              dec_bj_ptr_ff;
+logic [BP_WAYS_NUM - 1:0]                dec_branch_v_ff;
 
-logic                                    dec_egr_window_pc_en;
+//   PC, IMM and ptr for jumps
+logic                                    dec_jump_pc_imm_en;
+logic [PC_WIDTH - 1:0]                   dec_jump_instr_pc_next;
+logic [JUMP_IMM_BASE_WIDTH - 1:0]        dec_jump_imm_base_next;
+logic [WAY_PTR_WIDTH - 1:0]              dec_jump_ptr_next;
+logic [PC_WIDTH - 1:0]                   dec_jump_instr_pc_ff;
+logic [JUMP_IMM_BASE_WIDTH - 1:0]        dec_jump_imm_base_ff;
+logic [WAY_PTR_WIDTH - 1:0]              dec_jump_ptr_ff;
 
+//   PC, IMM and ptr for branches
+logic [BP_WAYS_NUM - 1:0]                dec_branch_pc_imm_en;
+logic [PC_WIDTH - 1:0]                   dec_branch_instr_pc_next [0:BP_WAYS_NUM - 1];
+logic [BRANCH_IMM_BASE_WIDTH - 1:0]      dec_branch_imm_base_next [0:BP_WAYS_NUM - 1];
+logic [WAY_PTR_WIDTH - 1:0]              dec_branch_ptr_next      [0:BP_WAYS_NUM - 1];
+logic [PC_WIDTH - 1:0]                   dec_branch_instr_pc_ff   [0:BP_WAYS_NUM - 1];
+logic [BRANCH_IMM_BASE_WIDTH - 1:0]      dec_branch_imm_base_ff   [0:BP_WAYS_NUM - 1];
+logic [WAY_PTR_WIDTH - 1:0]              dec_branch_ptr_ff        [0:BP_WAYS_NUM - 1];
+
+//   window PC
+logic                                    dec_window_pc_en;
 window_pc_t                              dec_window_pc_next;
 window_pc_t                              dec_window_pc_ff;
 
@@ -283,7 +302,7 @@ assign is_pending_branch_instr = is_branch_vec & ~processed_ff;
 always_comb begin
   priority case (1'b1)
 <$ for instr_dec in range(pipeline_width): $>
-    is_pending_jump_instr[</ instr_dec />]: begin
+    is_pending_jump_instr[</ instr_dec />] & ~processed_ff[</ instr_dec />]: begin
       jump_instr_ptr = WAY_PTR_WIDTH'(</ instr_dec />);
       is_jal_v     = is_jal_vec   [</ instr_dec />];
       is_jalr_v    = is_jalr_vec  [</ instr_dec />];
@@ -298,11 +317,14 @@ always_comb begin
   endcase
 end
 
-// find branch instructions
+// auxiliary signal for any jal or jalr
+assign is_jump_v = is_jal_v | is_jalr_v;
+
+// find to-be-processed and overflowing branch instructions
 
 always_comb begin
   automatic logic [WAYS_NUM - 1:0] processed_branch;
-  processed_branch = WAYS_NUM'('0);
+  processed_branch = processed_ff;
 
 <$ for branch_way in range(bp_ways_num): $>
   // find </ branch_way /> branch
@@ -310,7 +332,7 @@ always_comb begin
 <$   for instr_dec in range(branch_way, pipeline_width): $>
     is_pending_branch_instr[</ instr_dec />] & ~processed_branch[</ instr_dec />]: begin
       is_branch_v     [</ branch_way />] = 1'b1;
-      branch_instr_ptr[</ branch_way />] = BP_WAYS_NUM'(</ branch_way />);
+      branch_instr_ptr[</ branch_way />] = BP_WAYS_NUM'(</ instr_dec />);
       processed_branch[</ instr_dec />]  = 1'b1;
     end
 
@@ -322,6 +344,21 @@ always_comb begin
   endcase
 
 <$ end $>
+
+  // find first overflowing branch
+  priority case (1'b1)
+<$ for instr_dec in range(bp_ways_num, pipeline_width): $>
+    is_pending_branch_instr[</ instr_dec />] & ~processed_branch[</ instr_dec />]: begin
+      branch_ovfl_v         = 1'b1;
+      branch_instr_ovfl_ptr = WAY_PTR_WIDTH'(</ instr_dec />);
+    end
+
+<$ end $>
+    default: begin
+      branch_ovfl_v         = 1'b1;
+      branch_instr_ovfl_ptr = WAY_PTR_WIDTH'('x);
+    end
+  endcase
 end
 
 // PC hash to sent to BP
@@ -330,17 +367,185 @@ end
 assign branch_pc_hash[</ branch />] = instr_pc[branch_instr_ptr[</ branch />]][BP_HASH_BIT_MSB - 1:BP_HASH_BIT_LSB];
 <$ end $>
 
+// extract IMM for branch and jump
+
+// branch
+<$ for branch in range(bp_ways_num): $>
+assign branch_imm_base[</ branch />] = {realligned_instr[branch_instr_ptr[</ branch />]][31],
+                                        realligned_instr[branch_instr_ptr[</ branch />]][7],
+                                        realligned_instr[branch_instr_ptr[</ branch />]][30:25],
+                                        realligned_instr[branch_instr_ptr[</ branch />]][11:8]};
+<$ end $>
+
+// jal
+assign jal_imm_base = {realligned_instr[jump_instr_ptr][31],
+                       realligned_instr[jump_instr_ptr][19:12],
+                       realligned_instr[jump_instr_ptr][20],
+                       realligned_instr[jump_instr_ptr][30:21]};
+
+// jalr
+assign jalr_imm_base = realligned_instr[jump_instr_ptr][31:20];
+
+// jump
+assign jump_imm_base = is_jal_vec ? JUMP_IMM_BASE_WIDTH'(jal_imm_base)
+                                  : JUMP_IMM_BASE_WIDTH'(jalr_imm_base);
+
 
 ////////////////////////////////// PROGRESSION CONTROL //////////////////////////////////
 
-// TODO: one jump and BP_WAYS_NUM branches per window
+// instructions can be processed
+
+// branch
+// BP_WAYS_NUM branches can be handled per cycle, so always
+// check for branch overflow and take all instructions
+// before overflowing branch
+assign processing_before_branch = branch_ovfl_v
+                                    // all instructions until BP can handle branches
+                                    ? fill_vec_until_ptr_excl_f(branch_instr_ovfl_ptr)
+                                    // all instructions if all branches can be handled
+                                    : {WAYS_NUM{1'b1}};
+
+// jump
+// only one jump instruction can be handled per cycle,
+// simultaneously with any number of branches so take
+// all prev instructions including jump itself
+assign processing_before_jump   = is_jump_v
+                                    // all instructions before jump
+                                    ? fill_vec_until_ptr_incl_f(jump_instr_ptr)
+                                    // all instructions in window if no jumps
+                                    : {WAYS_NUM{1'b1}};
+
+// processing register
+
+// all instructions processed if instructions were processed previously
+// or will be processed this cycle
+assign all_instructions_processed = &(processed_ff | (processing_before_branch & processing_before_jump));
+
+assign processed_en   = iq_instr_pack_v_i & ~stall_i;
+
+assign processed_next = all_instructions_processed
+                          // clear if all instructions processed
+                          ? WAYS_NUM'('0)
+                          // otherwise add newly processed instructions
+                          : processed_ff | (processing_before_branch & processing_before_jump);
+
+always_ff @(posedge clk_i or negedge rstn_i) begin
+  if (~rstn_i) begin
+    processed_ff <= WAYS_NUM'('0);
+  end
+  else begin
+    if (processed_en) begin
+      processed_ff <= processed_next;
+    end
+end
+
+// read from IQ control
 
 // TBD
 
 
 //////////////////////////////////// EGRESS REGISTERS ///////////////////////////////////
 
-// TBD
+// valid
+
+// to-be-send instructions all except for already processed
+assign dec_raw_instr_v_next = {WAYS_NUM{iq_instr_pack_v_i}} & ~processed_ff;
+
+always_ff @(posedge clk or negedge rstn_i) begin
+  if (~rstn_i) begin
+    dec_raw_instr_v_ff <= WAYS_NUM'('0);
+  end
+  else begin
+    dec_raw_instr_v_ff <= dec_raw_instr_v_next;
+  end
+end
+
+// raw instructions
+
+assign dec_raw_instr_en   = dec_raw_instr_v_next;
+
+assign dec_raw_instr_next = realligned_instr;
+
+<$ for way in range(pipeline_width): $>
+always_ff @(posedge clk_i) begin
+  if (dec_raw_instr_en[</ way />]) begin
+    dec_raw_instr_ff[</ way />] <= dec_raw_instr_next[</ way />];
+  end
+end
+
+<$ end $>
+
+// the control and flag signals
+
+assign dec_jal_v_next    = is_jal_v;
+assign dec_jalr_v_next   = is_jalr_v;
+assign dec_branch_v_next = is_branch_v;
+
+always_ff @(posedge clk_i or negedge rstn_i) begin
+  if (~rstn_i) begin
+    dec_jal_v_ff    <= 1'b0;
+    dec_jalr_v_ff   <= 1'b0;
+    dec_branch_v_ff <= BP_WAYS_NUM'('0);
+  end
+  else begin
+    dec_jal_v_ff    <= dec_jal_v_next;
+    dec_jalr_v_ff   <= dec_jalr_v_next;
+    dec_branch_v_ff <= dec_branch_v_next;
+  end
+end
+
+// PC, IMM and ptr for jumps
+
+assign dec_jump_pc_imm_en = is_jump_v;
+
+assign dec_jump_instr_pc_next = instr_pc[jump_instr_ptr];
+assign dec_jump_imm_base_next = jump_imm_base;
+assign dec_jump_ptr_next      = jump_instr_ptr;
+
+always_ff @(posedge clk_i) begin
+  if (dec_jump_pc_imm_en) begin
+    dec_jump_instr_pc_ff <= dec_jump_instr_pc_next;
+    dec_jump_imm_base_ff <= dec_jump_imm_base_next;
+    dec_jump_ptr_ff      <= dec_jump_ptr_next;
+  end
+end
+
+// PC, IMM and ptr for branches
+
+assign dec_branch_pc_imm_en = is_branch_v;
+
+<$ for branch in range(bp_ways_num): $>
+assign dec_branch_instr_pc_next[</ branch />] = instr_pc[branch_instr_ptr[</ branch />]];
+assign dec_branch_imm_base_next[</ branch />] = branch_imm_base [</ branch />];
+assign dec_branch_ptr_next     [</ branch />] = branch_instr_ptr[</ branch />];
+
+<$ end $>
+
+<$ for way in range(pipeline_width): $>
+always_ff @(posedge clk_i) begin
+  if (dec_branch_pc_imm_en[</ way />]) begin
+    dec_branch_instr_pc_ff[</ way />] <= dec_branch_instr_pc_next[</ way />];
+    dec_branch_imm_base_ff[</ way />] <= dec_branch_imm_base_next[</ way />];
+    dec_branch_ptr_ff     [</ way />] <= dec_branch_ptr_next     [</ way />];
+  end
+end
+
+<$ end $>
+
+// window PC
+
+assign dec_window_pc_en = // all valid instructions processed
+                          (iq_instr_pack_v_i & all_instructions_processed) |
+                          // or none of them were processed (starting coniditions)
+                          (iq_instr_pack_v_i & ~(|processed_ff));
+
+assign dec_window_pc_next = window_pc;
+
+always_ff @(posedge clk_i) begin
+  if (dec_window_pc_en) begin
+    dec_window_pc_ff <= dec_window_pc_next;
+  end
+end
 
 
 /////////////////////////////// OUTPUT SIGNALS ASSIGNMENT ///////////////////////////////
@@ -349,25 +554,48 @@ assign branch_pc_hash[</ branch />] = instr_pc[branch_instr_ptr[</ branch />]][B
 assign iq_instr_pack_read_v_o =
 
 // BP (Branch Predictor)
-assign bp_predict_v_o         =
-assign bp_predict_hash_o      =
+assign bp_predict_v_o         = is_branch_v;
+assign bp_predict_hash_o      = branch_pc_hash;
 
 // DEC (Decoder)
-assign dec_raw_instr_v_o      =
-assign dec_raw_instr_o        =
+assign dec_raw_instr_v_o      = dec_raw_instr_v_ff;
+assign dec_raw_instr_o        = dec_raw_instr_ff;
 
-assign dec_window_pc_o        =
+assign dec_window_pc_o        = dec_window_pc_ff;
 
-assign dec_jump_instr_pc_o    =
-assign dec_branch_instr_pc_o  =
+assign dec_jump_instr_pc_o    = dec_jump_instr_pc_ff;
+assign dec_branch_instr_pc_o  = dec_branch_instr_pc_ff;
 
-assign dec_jump_imm_base_o    =
-assign dec_branch_imm_base_o  =
+assign dec_jump_imm_base_o    = dec_jump_imm_base_ff;
+assign dec_branch_imm_base_o  = dec_branch_imm_base_ff;
 
-assign dec_jal_v_o            =
-assign dec_jalr_v_o           =
-assign dec_branch_v_o         =
-assign dec_branch_ptr_o       =
+assign dec_jal_v_o            = dec_jal_v_ff;
+assign dec_jalr_v_o           = dec_jalr_v_ff;
+assign dec_branch_v_o         = dec_branch_v_ff;
+assign dec_branch_ptr_o       = dec_branch_ptr_ff;
+
+
+///////////////////////////// INTERNAL FUNCTIONS DECLARATION ////////////////////////////
+
+// fill bit-vector with ones until given pointer
+// bit equal to pointer itself is INCLUDED
+function automatic logic [WAYS_NUM - 1:0] fill_vec_until_ptr_incl_f (
+    input logic [WAY_PTR_WIDTH - 1:0] way_ptr_i
+  );
+<$ for way in range(pipeline_width): $>
+  fill_vec_until_ptr_incl_f[</ way />] = (</ way /> <= way_ptr_i);
+<$ end $>
+endfunction
+
+// fill bit-vector with ones until given pointer
+// bit equal to pointer itself is EXCLUDED
+function automatic logic [WAYS_NUM - 1:0] fill_vec_until_ptr_excl_f (
+    input logic [WAY_PTR_WIDTH - 1:0] way_ptr_i
+  );
+<$ for way in range(pipeline_width): $>
+  fill_vec_until_ptr_excl_f[</ way />] = (</ way /> < way_ptr_i);
+<$ end $>
+endfunction
 
 
 <$ if assertions: $>
