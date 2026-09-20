@@ -335,14 +335,14 @@ always_comb begin
 <$   for instr_dec in range(branch_way, pipeline_width): $>
     is_pending_branch_instr[</ instr_dec />] & ~processed_branch[</ instr_dec />]: begin
       is_branch_v     [</ branch_way />] = 1'b1;
-      branch_instr_ptr[</ branch_way />] = BP_WAYS_NUM'(</ instr_dec />);
+      branch_instr_ptr[</ branch_way />] = WAY_PTR_WIDTH'(</ instr_dec />);
       processed_branch[</ instr_dec />]  = 1'b1;
     end
 
 <$   end $>
     default: begin
       is_branch_v     [</ branch_way />] = 1'b0;
-      branch_instr_ptr[</ branch_way />] = BP_WAYS_NUM'('x);
+      branch_instr_ptr[</ branch_way />] = WAY_PTR_WIDTH'('x);
     end
   endcase
 
