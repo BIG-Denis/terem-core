@@ -459,8 +459,12 @@ assign iq_read_num = (iq_instr_pack_v_i & all_instructions_processed)
 
 // valid
 
-// to-be-send instructions all except for already processed
-assign dec_raw_instr_v_next = {WAYS_NUM{iq_instr_pack_v_i}} & ~processed_ff;
+assign dec_raw_instr_v_next = // only when input instructions are valid
+                              {WAYS_NUM{iq_instr_pack_v_i}} &
+                              // do not send already processed instructions
+                              ~processed_ff &
+                              // all instruction until branch overflow or first jump
+                              (processing_before_branch & processing_before_jump);
 
 always_ff @(posedge clk_i or negedge rstn_i) begin
   if (~rstn_i) begin
