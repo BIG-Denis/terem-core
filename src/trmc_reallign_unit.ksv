@@ -36,6 +36,9 @@ import </ module_id />_pkg::*;
   // RAS (Return Address Stack)
   input  logic [PC_WIDTH - 1:0]              ras_return_pc_i,
 
+  // ROB (Reorder Buffer)
+  input  logic [PC_WIDTH - 1:0]              rob_goto_pc_i,
+
   // DEC (Decoder)
   input  logic                               dec_goto_ras_v_i,
   input  logic                               dec_goto_v_i,
@@ -57,7 +60,7 @@ import </ module_id />_pkg::*;
   output logic [WAY_PTR_WIDTH - 1:0]         dec_jump_ptr_o,
 
   output logic [BP_WAYS_NUM - 1:0]           dec_branch_v_o,
-  output logic [WAY_PTR_WIDTH - 1:0]         dec_branch_ptr_o
+  output logic [WAY_PTR_WIDTH - 1:0]         dec_branch_ptr_o      [0:BP_WAYS_NUM - 1]
 );
 
 ///////////////////////////// INTERNAL CONSTANTS DECLARATION ////////////////////////////
@@ -71,7 +74,7 @@ localparam int unsigned PREV_</ instr />_NUM_WIDTH = $clog2(</ max(1, instr) /> 
 localparam int unsigned INSTR_OFFSET_WIDTH         = $clog2(IQ_INSTR_PACK_WIDTH);
 
 // PC increment width
-//   increment width is a 4 bytes per instruction * instruction num per window
+// increment width is a 4 bytes per instruction * instruction num per window
 localparam int unsigned PC_INCR_WIDTH              = $clog2(PIPELINE_WIDTH * 4);
 
 // BP bits range
@@ -233,15 +236,17 @@ assign base_pc_incr =
 
 // program counter
 
-assign base_pc_next = // goto calculated PC from decode stage (jump or RAS push)
-                      dec_goto_v_i     ? dec_pc_i
+assign base_pc_next = // goto restored PC from ROB when flush
+                      flush_i          ? rob_goto_pc_i
+                      // goto calculated PC from decode stage (jump or RAS push)
+                    : dec_goto_v_i     ? dec_pc_i
                       // goto RAS top (RAS pop)
                     : dec_goto_ras_v_i ? ras_return_pc_i
                       // increment PC for read instruction
                     : base_pc_ff + PC_WIDTH'(base_pc_incr);
 
 assign base_pc_en = // goto some PC
-                    dec_goto_v_i | dec_goto_ras_v_i |
+                    dec_goto_v_i | dec_goto_ras_v_i | flush_i |
                     // new instructions (PC increment)
                     iq_instr_pack_v_i & ~stall_i;
 
@@ -421,8 +426,8 @@ assign all_instructions_processed = &(processed_ff | (processing_before_branch &
 
 assign processed_en   = iq_instr_pack_v_i & ~stall_i;
 
-assign processed_next = all_instructions_processed
-                          // clear if all instructions processed
+assign processed_next = flush_i | all_instructions_processed
+                          // clear if all instructions processed or flush
                           ? WAYS_NUM'('0)
                           // otherwise add newly processed instructions
                           : processed_ff | (processing_before_branch & processing_before_jump);
@@ -459,7 +464,9 @@ assign iq_read_num = (iq_instr_pack_v_i & all_instructions_processed)
 
 // valid
 
-assign dec_raw_instr_v_next = // only when input instructions are valid
+assign dec_raw_instr_v_next = // clear on flush
+                              ~{WAYS_NUM{flush_i}} &
+                              // only when input instructions are valid
                               {WAYS_NUM{iq_instr_pack_v_i}} &
                               // do not send already processed instructions
                               ~processed_ff &
@@ -586,6 +593,8 @@ assign dec_branch_imm_base_o  = dec_branch_imm_base_ff;
 
 assign dec_jal_v_o            = dec_jal_v_ff;
 assign dec_jalr_v_o           = dec_jalr_v_ff;
+assign dec_jump_ptr_o         = dec_jump_ptr_ff;
+
 assign dec_branch_v_o         = dec_branch_v_ff;
 assign dec_branch_ptr_o       = dec_branch_ptr_ff;
 
