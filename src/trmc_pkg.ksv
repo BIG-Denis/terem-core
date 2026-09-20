@@ -11,26 +11,26 @@ package </ module_id />_pkg;
 /////////////////////////////////// GENERIC PARAMETERS //////////////////////////////////
 
 // Common
-localparam int unsigned DATA_WIDTH             = 32;
-localparam int unsigned PC_WIDTH               = 32;
-localparam int unsigned BYTE_WIDTH             = 8;
-localparam int unsigned LONG_INSTR_WIDTH       = 32;
-localparam int unsigned COMPR_INSTR_WIDTH      = 16;
+localparam int unsigned DATA_WIDTH          = 32;
+localparam int unsigned PC_WIDTH            = 32;
+localparam int unsigned BYTE_WIDTH          = 8;
+localparam int unsigned LONG_INSTR_WIDTH    = 32;
+localparam int unsigned COMPR_INSTR_WIDTH   = 16;
 
 // Architectural registers
-localparam int unsigned ARCH_REG_CNT           = 32;
-localparam int unsigned ARCH_REG_ADDR_WIDTH    = $clog2(ARCH_REG_CNT);
+localparam int unsigned ARCH_REG_CNT        = 32;
+localparam int unsigned ARCH_REG_ADDR_WIDTH = $clog2(ARCH_REG_CNT);
 
 // Pipeline
-localparam int unsigned PIPELINE_WIDTH         = </ pipeline_width />;
+localparam int unsigned PIPELINE_WIDTH      = </ pipeline_width />;
 
 // Branch Predictor
-localparam int unsigned BP_HASH_BITS_NUM       = </ bp_pc_hash_bits />;
-localparam int unsigned BP_HASH_BIT_LSB        = 2; //! TODO: change to 1 after implementing C extension
+localparam int unsigned BP_WAYS_NUM         = </ bp_ways_num />;
+localparam int unsigned BP_HASH_BITS_NUM    = </ bp_pc_hash_bits />;
 
 // Instruction Queue
-localparam int unsigned IQ_INSTR_PACK_WIDTH    = PIPELINE_WIDTH * LONG_INSTR_WIDTH;
-localparam int unsigned IQ_READ_ACK_WIDTH      = IQ_INSTR_PACK_WIDTH / COMPR_INSTR_WIDTH;
+localparam int unsigned IQ_INSTR_PACK_WIDTH = PIPELINE_WIDTH * LONG_INSTR_WIDTH;
+localparam int unsigned IQ_READ_WIDTH       = IQ_INSTR_PACK_WIDTH / COMPR_INSTR_WIDTH;
 
 
 ///////////////////////////////////// INTERNAL TYPES ////////////////////////////////////

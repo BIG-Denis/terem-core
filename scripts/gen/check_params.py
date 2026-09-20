@@ -37,3 +37,4 @@ def check_params_branch_predictor(parameters):
     assert type(parameters['bp_pc_hash_bits']) == int, "bp_pc_hash_bits must be integer!"
     assert parameters['bp_pc_hash_bits'] > 1, "bp_pc_hash_bits must be greater than 1!"
     assert parameters['bp_pc_hash_bits'] < 9, "bp_pc_hash_bits must not be greater than 30!"
+    assert parameters['bp_ways_num'] < parameters['pipeline_width'], "bp_ways_num must be less than pipeline_width!"

@@ -30,8 +30,8 @@ import </ module_id />_pkg::*;
   output logic [IQ_READ_WIDTH - 1:0]       iq_instr_pack_read_v_o,
 
   // BP (Branch Predictor)
-  output logic                             bp_predict_v_o,
-  output logic [BP_HASH_BITS_NUM - 1:0]    bp_predict_hash_o,
+  output logic [BP_WAYS_NUM - 1:0]         bp_predict_v_o,
+  output logic [BP_HASH_BITS_NUM - 1:0]    bp_predict_hash_o     [0:BP_WAYS_NUM - 1],
 
   // RAS (Return Address Stack)
   input  logic [PC_WIDTH - 1:0]            ras_return_pc_i,
@@ -42,16 +42,29 @@ import </ module_id />_pkg::*;
   input  logic [PC_WIDTH - 1:0]            dec_pc_i,
 
   output logic [WAYS_NUM - 1:0]            dec_raw_instr_v_o,
-  output logic [LONG_INSTR_WIDTH - 1:0]    dec_raw_instr_o [0:WAYS_NUM - 1],
+  output logic [LONG_INSTR_WIDTH - 1:0]    dec_raw_instr_o       [0:WAYS_NUM - 1],
 
   output window_pc_t                       dec_window_pc_o,
 
-  output logic [PC_WIDTH - 1:0]            dec_bj_instr_pc_o,
-  output logic [DATA_WIDTH - 1:0]          dec_bj_imm_o,
-  output logic                             dec_branch_v_o,
+  output logic [PC_WIDTH - 1:0]            dec_jump_instr_pc_o,
+  output logic [PC_WIDTH - 1:0]            dec_branch_instr_pc_o [0:BP_WAYS_NUM - 1],
+
+  output logic [DATA_WIDTH - 1:0]          dec_jump_imm_base_o,
+  output logic [DATA_WIDTH - 1:0]          dec_branch_imm_base_o [0:BP_WAYS_NUM - 1],
+
   output logic                             dec_jal_v_o,
   output logic                             dec_jalr_v_o,
-  output logic [WAY_PTR_WIDTH - 1:0]       dec_bj_ptr_o
+  output logic [WAY_PTR_WIDTH - 1:0]       dec_jump_ptr_o,
+
+  output logic [BP_WAYS_NUM - 1:0]         dec_branch_v_o,
+  output logic [WAY_PTR_WIDTH - 1:0]       dec_branch_ptr_o
+
+  // output logic [PC_WIDTH - 1:0]            dec_bj_instr_pc_o,
+  // output logic [DATA_WIDTH - 1:0]          dec_bj_imm_o,
+  // output logic                             dec_branch_v_o,
+  // output logic                             dec_jal_v_o,
+  // output logic                             dec_jalr_v_o,
+  // output logic [WAY_PTR_WIDTH - 1:0]       dec_bj_ptr_o
 );
 
 ///////////////////////////// INTERNAL CONSTANTS DECLARATION ////////////////////////////
@@ -67,6 +80,10 @@ localparam int unsigned INSTR_OFFSET_WIDTH         = $clog2(IQ_INSTR_PACK_WIDTH)
 // PC increment width
 //   increment width is a 4 bytes per instruction * instruction num per window
 localparam int unsigned PC_INCR_WIDTH              = $clog2(PIPELINE_WIDTH * 4)
+
+// BP bits range
+localparam int unsigned BP_HASH_BIT_LSB            = 2;  //! TODO: change to 1 after implementing C extension
+localparam int unsigned BP_HASH_BIT_MSB            = BP_HASH_BIT_LSB + BP_HASH_BITS_NUM;
 
 ////////////////////////////// INTERNAL SIGNALS DECLARATION /////////////////////////////
 
@@ -93,22 +110,31 @@ logic [PC_WIDTH - 1:0]                   instr_pc           [0:WAYS_NUM - 1];
 
 window_pc_t                              window_pc;
 
-// Branch and jump detection
+// Branch and jump detection and processing
 
 logic [WAYS_NUM - 1:0]                   is_branch_vec;
 logic [WAYS_NUM - 1:0]                   is_jal_vec;
 logic [WAYS_NUM - 1:0]                   is_jalr_vec;
 
-logic                                    is_branch_v;
+logic [BP_WAYS_NUM - 1:0]                is_branch_v;
 logic                                    is_jal_v;
 logic                                    is_jalr_v;
-logic [WAY_PTR_WIDTH - 1:0]              bj_instr_ptr;
 
-logic [WAYS_NUM - 1:0]                   is_pending_bj_instr;
+logic [WAY_PTR_WIDTH - 1:0]              jump_instr_ptr;
+logic [WAY_PTR_WIDTH - 1:0]              branch_instr_ptr   [0:BP_WAYS_NUM - 1];
 
-logic                                    bj_processed_en;
-logic [WAYS_NUM - 1:0]                   bj_processed_next;
-logic [WAYS_NUM - 1:0]                   bj_processed_ff;
+logic [WAYS_NUM - 1:0]                   is_pending_jump_instr;
+logic [WAYS_NUM - 1:0]                   is_pending_branch_instr;
+
+logic [BP_HASH_BITS_NUM]                 branch_pc_hash;
+
+// Forward progression
+
+logic                                    processed_en;
+logic [WAYS_NUM - 1:0]                   processed_next;
+logic [WAYS_NUM - 1:0]                   processed_ff;
+
+
 
 // DEC egress registers
 
@@ -174,7 +200,7 @@ assign realligned_instr[</ instr_dec />] = iq_instr_pack_i[instr_offset[</ instr
 // detect long instructions
 
 <$ for instr_dec in range(pipeline_width): $>
-assign is_long_instr[</ instr_dec />] = realligned_instr[</ instr_dec />][1:0] != 2'b11;
+assign is_long_instr[</ instr_dec />] = realligned_instr[</ instr_dec />][1:0] == 2'b11;
 <$ end $>
 
 
@@ -200,7 +226,7 @@ assign base_pc_next = // goto calculated PC from decode stage (jump or RAS push)
 assign base_pc_en = // goto some PC
                     dec_goto_v_i | dec_goto_ras_v_i |
                     // new instructions (PC increment)
-                    iq_instr_pack_v_i & stall_i;
+                    iq_instr_pack_v_i & ~stall_i;
 
 always_ff @(posedge clk_i or negedge rstn_i) begin
   if (~rstn_i) begin
@@ -240,43 +266,74 @@ assign window_pc.is_long_instr_vec = is_long_instr;
 // find BJ instructions
 
 <$ for instr_dec in range(pipeline_width): $>
-// instruction </ instr_dec />
+//   instruction </ instr_dec />
 assign is_branch_vec[</ instr_dec />] = (realligned_instr[6:0] == 7'b1100011);  // branch
 assign is_jal_vec   [</ instr_dec />] = (realligned_instr[6:0] == 7'b1101111);  // jal
 assign is_jalr_vec  [</ instr_dec />] = (realligned_instr[6:0] == 7'b1100111);  // jalr
 
 <$ end $>
 
-// any BJ instructuions vector
+// pending branch and jumps vectors
 
-assign is_pending_bj_instr = (is_branch_vec | is_jal_vec | is_jalr_vec) & ~bj_processed_ff;
+assign is_pending_jump_instr   = (is_jal_vec | is_jalr_vec) & ~processed_ff;
+assign is_pending_branch_instr = is_branch_vec & ~processed_ff;
 
-// find first BJ entry
+// find first jump instruction
 
 always_comb begin
   priority case (1'b1)
 <$ for instr_dec in range(pipeline_width): $>
-    is_pending_bj_instr[</ instr_dec />]: begin
-      bj_instr_ptr = WAY_PTR_WIDTH'(</ instr_dec />);
-      is_branch_v  = is_branch_vec[</ instr_dec />];
+    is_pending_jump_instr[</ instr_dec />]: begin
+      jump_instr_ptr = WAY_PTR_WIDTH'(</ instr_dec />);
       is_jal_v     = is_jal_vec   [</ instr_dec />];
       is_jalr_v    = is_jalr_vec  [</ instr_dec />];
     end
 
 <$ end $>
     default: begin
-      bj_instr_ptr = WAY_PTR_WIDTH'('x);
-      is_branch_v  = 1'b0;
-      is_jal_v     = 1'b0;
-      is_jalr_v    = 1'b0;
+      jump_instr_ptr = WAY_PTR_WIDTH'('x);
+      is_jal_v       = 1'b0;
+      is_jalr_v      = 1'b0;
     end
   endcase
 end
 
+// find branch instructions
+
+always_comb begin
+  automatic logic [WAYS_NUM - 1:0] processed_branch;
+  processed_branch = WAYS_NUM'('0);
+
+<$ for branch_way in range(bp_ways_num): $>
+  // find </ branch_way /> branch
+  priority case (1'b1)
+<$   for instr_dec in range(branch_way, pipeline_width): $>
+    is_pending_branch_instr[</ instr_dec />] & ~processed_branch[</ instr_dec />]: begin
+      is_branch_v     [</ branch_way />] = 1'b1;
+      branch_instr_ptr[</ branch_way />] = BP_WAYS_NUM'(</ branch_way />);
+      processed_branch[</ instr_dec />]  = 1'b1;
+    end
+
+<$   end $>
+    default: begin
+      is_branch_v     [</ branch_way />] = 1'b0;
+      branch_instr_ptr[</ branch_way />] = BP_WAYS_NUM'('x);
+    end
+  endcase
+
+<$ end $>
+end
+
+// PC hash to sent to BP
+
+<$ for branch in range(bp_ways_num): $>
+assign branch_pc_hash[</ branch />] = instr_pc[branch_instr_ptr[</ branch />]][BP_HASH_BIT_MSB - 1:BP_HASH_BIT_LSB];
+<$ end $>
+
 
 ////////////////////////////////// PROGRESSION CONTROL //////////////////////////////////
 
-// TODO: one jump and one branch per window
+// TODO: one jump and BP_WAYS_NUM branches per window
 
 // TBD
 
@@ -288,14 +345,115 @@ end
 
 /////////////////////////////// OUTPUT SIGNALS ASSIGNMENT ///////////////////////////////
 
-// TBD
+// IQ (Instruction Queue)
+assign iq_instr_pack_read_v_o =
+
+// BP (Branch Predictor)
+assign bp_predict_v_o         =
+assign bp_predict_hash_o      =
+
+// DEC (Decoder)
+assign dec_raw_instr_v_o      =
+assign dec_raw_instr_o        =
+
+assign dec_window_pc_o        =
+
+assign dec_jump_instr_pc_o    =
+assign dec_branch_instr_pc_o  =
+
+assign dec_jump_imm_base_o    =
+assign dec_branch_imm_base_o  =
+
+assign dec_jal_v_o            =
+assign dec_jalr_v_o           =
+assign dec_branch_v_o         =
+assign dec_branch_ptr_o       =
 
 
 <$ if assertions: $>
 /////////////////////////////////////// ASSERTIONS //////////////////////////////////////
 
-// TBD
+// Pipeline
 
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  !$isunknown(stall_i))
+  else $error("stall_i must be known!");
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  !$isunknown(flush_i))
+  else $error("flush_i must be known!");
+
+// IQ (Instruction Queue)
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  !$isunknown(iq_instr_pack_v_i))
+  else $error("iq_instr_pack_v_i must be known!");
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  iq_instr_pack_v_i |-> !$isunknown(iq_instr_pack_i))
+  else $error("iq_instr_pack_i must be known when iq_instr_pack_v_i is high!");
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  !$isunknown(iq_instr_pack_read_v_o))
+  else $error("iq_instr_pack_read_v_o must be known!");
+
+// BP (Branch Predictor)
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  !$isunknown(bp_predict_v_o))
+  else $error("bp_predict_v_o must be known!");
+
+<$   for branch in range(bp_ways_num): $>
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  bp_predict_v_o[</ branch />] |-> !$isunknown(bp_predict_hash_o[</ branch />]))
+  else $error("bp_predict_hash_o[</ branch />] must be known when bp_predict_v_o[</ branch />] is high!");
+<$   end $>
+
+// RAS (Return Address Stack)
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  dec_goto_ras_v_i |-> !$isunknown(ras_return_pc_i))
+  else $error("ras_return_pc_i must be known when dec_goto_ras_v_i is high!");
+
+// DEC (Decoder)
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  !$isunknown(dec_goto_ras_v_i))
+  else $error("dec_goto_ras_v_i must be known!");
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  !$isunknown(dec_goto_v_i))
+  else $error("dec_goto_v_i must be known!");
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  dec_goto_v_i |-> !$isunknown(dec_pc_i))
+  else $error("dec_pc_i must be known when dec_goto_v_i is high!");
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  !$isunknown(dec_raw_instr_v_o))
+  else $error("dec_raw_instr_v_o must be known!");
+
+// Internal signals
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  !$isunknown(is_branch_vec))
+  else $error("is_branch_vec must be known!");
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  !$isunknown(is_jal_vec))
+  else $error("is_jal_vec must be known!");
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  !$isunknown(is_jalr_vec))
+  else $error("is_jalr_vec must be known!");
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  ~(|((is_branch_vec & is_jal_vec) | (is_jal_vec & is_jalr_vec) | (is_jalr_vec & is_branch_vec))))
+  else $error("is_branch_vec, is_jal_vec and is_jalr_vec must not intersect!");
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  !$isunknown(base_pc_ff))
+  else $error("base_pc_ff must be known!");
 
 <$ end $>
 

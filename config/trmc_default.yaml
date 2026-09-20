@@ -10,8 +10,8 @@ module_id: teremcore
 pipeline_width:  4
 
 # BP (branch predictor)
+bp_ways_num:     2
 bp_pc_hash_bits: 8
-
 
 
 # verification
