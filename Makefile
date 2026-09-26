@@ -13,15 +13,24 @@
 .PHONY: help init build lint lint-wall clean clean-all
 .DEFAULT_GOAL := help
 
-# Variables
+# Makefile variables
+#   executables
 PYTHON       = python3
+VERILATOR    = verilator
+#   python utils
 VENV_NAME    = .venv
 VENV_PYTHON  = $(VENV_NAME)/bin/python
 VENV_PIP     = $(VENV_NAME)/bin/pip
+#   files and folders
 REQUIREMENTS = scripts/requirements.txt
 BUILD_SCRIPT = scripts/gen/build.py
 BUILD_DIR    = build
 FILELIST     = project/filelists/trmc_filelist.f
+WAIVERS      = project/waivers/trmc_waivers.vlt
+#   command line arguments
+ARGS_VERILATOR_COMMON    = -sv $(WAIVERS) -f $(FILELIST)
+ARGS_VERILATOR_LINT      = $(ARGS_VERILATOR_COMMON) --lint-only
+ARGS_VERILATOR_LINT_WALL = $(ARGS_VERILATOR_LINT) -Wall
 
 # ----------------------------------------
 #   Makefile targets
@@ -41,7 +50,7 @@ help:
 # init - update submodules, create venv
 init:
 	@echo "> Initializing repository..."
-	git submodule update --init --recursive
+	git submodule update --init --recursive --checkout
 	$(PYTHON) -m venv $(VENV_NAME)
 	$(VENV_PIP) install --upgrade pip
 	$(VENV_PIP) install -r $(REQUIREMENTS)
@@ -54,14 +63,14 @@ build:
 # lint - lint builded design with verilator
 lint:
 	@echo "> Linting design with verilator..."
-	cd build && \
-	verilator --lint-only -sv -f $(FILELIST)
+	cd $(BUILD_DIR) && \
+	$(VERILATOR) $(ARGS_VERILATOR_LINT)
 
 # lint-wall: lint builded design with verilator showing all warnings
 lint-wall:
 	@echo "> Linting design with verilator showing all warnings..."
-	cd build && \
-	verilator --lint-only -sv -Wall -f $(FILELIST)
+	cd $(BUILD_DIR) && \
+	$(VERILATOR) $(ARGS_VERILATOR_LINT_WALL)
 
 # clean - clean build folder
 clean:

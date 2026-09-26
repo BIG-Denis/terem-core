@@ -1,0 +1,4 @@
+`verilator_config
+
+// RAU: function fill_vec_until_ptr_incl_f always set zero bit to one
+lint_off -rule UNSIGNED -file "*/</ module_id />_reallign_unit.sv" -match "*Comparison is constant due to unsigned arithmetic*"

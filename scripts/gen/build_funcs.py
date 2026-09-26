@@ -12,6 +12,7 @@ from aux_funcs import aux_funcs_collection
 
 
 FILELIST_PATH = "project/filelists/trmc_filelist.kf"
+WAIVERS_PATH = "project/waivers/trmc_waivers.kvlt"
 
 
 # top function, point of enter
@@ -27,6 +28,9 @@ def render_project(parameters, build_dir="build"):
 
     # render filelist
     render_filelist(parameters, FILELIST_PATH, build_dir)
+
+    # render waivers
+    render_waivers(parameters, WAIVERS_PATH, build_dir)
 
 
 # render easy files which not require any additional parameters manipulations
@@ -46,3 +50,9 @@ def render_filelist(parameters, filelist_path, build_dir):
     ksv.write_rendered_to_file(rendered_filelist, dest_filename)
 
 
+# render templated filelist
+def render_waivers(parameters, waivers_path, build_dir):
+    source_waivers = ksv.read_source_from_file(waivers_path)
+    rendered_waivers = ksv.render(source_waivers, parameters, logging=False)
+    dest_filename = build_dir + waivers_path.replace(".kvlt", ".vlt")
+    ksv.write_rendered_to_file(rendered_waivers, dest_filename)
