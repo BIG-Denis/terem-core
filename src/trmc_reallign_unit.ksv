@@ -635,6 +635,7 @@ assert property (@(posedge clk_i) disable iff (!rstn_i)
   !$isunknown(flush_i))
   else $error("flush_i must be known!");
 
+
 // IQ (Instruction Queue)
 
 assert property (@(posedge clk_i) disable iff (!rstn_i)
@@ -653,6 +654,7 @@ assert property (@(posedge clk_i) disable iff (!rstn_i)
   !iq_instr_pack_v_i |-> (iq_instr_pack_read_v_o == IQ_READ_WIDTH'('0)))
   else $error("iq_instr_pack_read_v_o must be set to zero when iq_instr_pack_v_i is low!");
 
+
 // BP (Branch Predictor)
 
 assert property (@(posedge clk_i) disable iff (!rstn_i)
@@ -665,11 +667,13 @@ assert property (@(posedge clk_i) disable iff (!rstn_i)
   else $error("bp_predict_hash_o[</ branch />] must be known when bp_predict_v_o[</ branch />] is high!");
 <$   end $>
 
+
 // RAS (Return Address Stack)
 
 assert property (@(posedge clk_i) disable iff (!rstn_i)
   dec_goto_ras_v_i |-> !$isunknown(ras_return_pc_i))
   else $error("ras_return_pc_i must be known when dec_goto_ras_v_i is high!");
+
 
 // DEC (Decoder)
 
@@ -688,6 +692,7 @@ assert property (@(posedge clk_i) disable iff (!rstn_i)
 assert property (@(posedge clk_i) disable iff (!rstn_i)
   !$isunknown(dec_raw_instr_v_o))
   else $error("dec_raw_instr_v_o must be known!");
+
 
 // Internal signals
 
