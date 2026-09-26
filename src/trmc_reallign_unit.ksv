@@ -17,50 +17,50 @@ import </ module_id />_pkg::*;
 
 ////////////////////////////// EXTERNAL SIGNALS DECLARATION /////////////////////////////
 
-  input  logic                               clk_i,
-  input  logic                               rstn_i,
+  input  logic                             clk_i,
+  input  logic                             rstn_i,
 
   // Pipeline
-  input  logic                               stall_i,
-  input  logic                               flush_i,
+  input  logic                             stall_i,
+  input  logic                             flush_i,
 
   // IQ (Instruction Queue)
-  input  logic                               iq_instr_pack_v_i,
-  input  logic [IQ_INSTR_PACK_WIDTH - 1:0]   iq_instr_pack_i,
-  output logic [IQ_READ_WIDTH - 1:0]         iq_instr_pack_read_v_o,
+  input  logic                             iq_instr_pack_v_i,
+  input  logic [IQ_INSTR_PACK_WIDTH - 1:0] iq_instr_pack_i,
+  output logic [IQ_READ_WIDTH - 1:0]       iq_instr_pack_read_v_o,
 
   // BP (Branch Predictor)
-  output logic [BP_WAYS_NUM - 1:0]           bp_predict_v_o,
-  output logic [BP_HASH_BITS_NUM - 1:0]      bp_predict_hash_o     [0:BP_WAYS_NUM - 1],
+  output logic [BP_WAYS_NUM - 1:0]         bp_predict_v_o,
+  output logic [BP_HASH_BITS_NUM - 1:0]    bp_predict_hash_o     [0:BP_WAYS_NUM - 1],
 
   // RAS (Return Address Stack)
-  input  logic [PC_WIDTH - 1:0]              ras_return_pc_i,
+  input  logic [PC_WIDTH - 1:0]            ras_return_pc_i,
 
   // ROB (Reorder Buffer)
-  input  logic [PC_WIDTH - 1:0]              rob_goto_pc_i,
+  input  logic [PC_WIDTH - 1:0]            rob_goto_pc_i,
 
   // DEC (Decoder)
-  input  logic                               dec_goto_ras_v_i,
-  input  logic                               dec_goto_v_i,
-  input  logic [PC_WIDTH - 1:0]              dec_pc_i,
+  input  logic                             dec_goto_ras_v_i,
+  input  logic                             dec_goto_v_i,
+  input  logic [PC_WIDTH - 1:0]            dec_pc_i,
 
-  output logic [WAYS_NUM - 1:0]              dec_raw_instr_v_o,
-  output logic [LONG_INSTR_WIDTH - 1:0]      dec_raw_instr_o       [0:WAYS_NUM - 1],
+  output logic [WAYS_NUM - 1:0]            dec_raw_instr_v_o,
+  output logic [LONG_INSTR_WIDTH - 1:0]    dec_raw_instr_o       [0:WAYS_NUM - 1],
 
-  output window_pc_t                         dec_window_pc_o,
+  output window_pc_t                       dec_window_pc_o,
 
-  output logic [PC_WIDTH - 1:0]              dec_jump_instr_pc_o,
-  output logic [PC_WIDTH - 1:0]              dec_branch_instr_pc_o [0:BP_WAYS_NUM - 1],
+  output logic [PC_WIDTH - 1:0]            dec_jump_instr_pc_o,
+  output logic [PC_WIDTH - 1:0]            dec_branch_instr_pc_o [0:BP_WAYS_NUM - 1],
 
-  output logic [JUMP_IMM_BASE_WIDTH - 1:0]   dec_jump_imm_base_o,
-  output logic [BRANCH_IMM_BASE_WIDTH - 1:0] dec_branch_imm_base_o [0:BP_WAYS_NUM - 1],
+  output logic [DATA_WIDTH - 1:0]          dec_jump_imm_o,
+  output logic [DATA_WIDTH - 1:0]          dec_branch_imm_o [0:BP_WAYS_NUM - 1],
 
-  output logic                               dec_jal_v_o,
-  output logic                               dec_jalr_v_o,
-  output logic [WAY_PTR_WIDTH - 1:0]         dec_jump_ptr_o,
+  output logic                             dec_jal_v_o,
+  output logic                             dec_jalr_v_o,
+  output logic [WAY_PTR_WIDTH - 1:0]       dec_jump_ptr_o,
 
-  output logic [BP_WAYS_NUM - 1:0]           dec_branch_v_o,
-  output logic [WAY_PTR_WIDTH - 1:0]         dec_branch_ptr_o      [0:BP_WAYS_NUM - 1]
+  output logic [BP_WAYS_NUM - 1:0]         dec_branch_v_o,
+  output logic [WAY_PTR_WIDTH - 1:0]       dec_branch_ptr_o      [0:BP_WAYS_NUM - 1]
 );
 
 ///////////////////////////// INTERNAL CONSTANTS DECLARATION ////////////////////////////
@@ -131,7 +131,11 @@ logic [BP_HASH_BITS_NUM - 1:0]           branch_pc_hash           [0:BP_WAYS_NUM
 logic [BRANCH_IMM_BASE_WIDTH - 1:0]      branch_imm_base          [0:BP_WAYS_NUM - 1];
 logic [JAL_IMM_BASE_WIDTH - 1:0]         jal_imm_base;
 logic [JALR_IMM_BASE_WIDTH - 1:0]        jalr_imm_base;
-logic [JUMP_IMM_BASE_WIDTH - 1:0]        jump_imm_base;
+
+logic [DATA_WIDTH - 1:0]                 branch_imm               [0:BP_WAYS_NUM - 1];
+logic [DATA_WIDTH - 1:0]                 jal_imm;
+logic [DATA_WIDTH - 1:0]                 jalr_imm;
+logic [DATA_WIDTH - 1:0]                 jump_imm;
 
 // Forward progression
 
@@ -169,19 +173,19 @@ logic [BP_WAYS_NUM - 1:0]                dec_branch_v_ff;
 //   PC, IMM and ptr for jumps
 logic                                    dec_jump_pc_imm_en;
 logic [PC_WIDTH - 1:0]                   dec_jump_instr_pc_next;
-logic [JUMP_IMM_BASE_WIDTH - 1:0]        dec_jump_imm_base_next;
+logic [DATA_WIDTH - 1:0]                 dec_jump_imm_next;
 logic [WAY_PTR_WIDTH - 1:0]              dec_jump_ptr_next;
 logic [PC_WIDTH - 1:0]                   dec_jump_instr_pc_ff;
-logic [JUMP_IMM_BASE_WIDTH - 1:0]        dec_jump_imm_base_ff;
+logic [DATA_WIDTH - 1:0]                 dec_jump_imm_ff;
 logic [WAY_PTR_WIDTH - 1:0]              dec_jump_ptr_ff;
 
 //   PC, IMM and ptr for branches
 logic [BP_WAYS_NUM - 1:0]                dec_branch_pc_imm_en;
 logic [PC_WIDTH - 1:0]                   dec_branch_instr_pc_next [0:BP_WAYS_NUM - 1];
-logic [BRANCH_IMM_BASE_WIDTH - 1:0]      dec_branch_imm_base_next [0:BP_WAYS_NUM - 1];
+logic [DATA_WIDTH - 1:0]                 dec_branch_imm_next      [0:BP_WAYS_NUM - 1];
 logic [WAY_PTR_WIDTH - 1:0]              dec_branch_ptr_next      [0:BP_WAYS_NUM - 1];
 logic [PC_WIDTH - 1:0]                   dec_branch_instr_pc_ff   [0:BP_WAYS_NUM - 1];
-logic [BRANCH_IMM_BASE_WIDTH - 1:0]      dec_branch_imm_base_ff   [0:BP_WAYS_NUM - 1];
+logic [DATA_WIDTH - 1:0]                 dec_branch_imm_ff        [0:BP_WAYS_NUM - 1];
 logic [WAY_PTR_WIDTH - 1:0]              dec_branch_ptr_ff        [0:BP_WAYS_NUM - 1];
 
 //   window PC
@@ -372,12 +376,14 @@ assign branch_pc_hash[</ branch />] = instr_pc[branch_instr_ptr[</ branch />]][B
 
 // extract IMM for branch and jump
 
-// branch
 <$ for branch in range(bp_ways_num): $>
+// branch </ branch />
 assign branch_imm_base[</ branch />] = {realligned_instr[branch_instr_ptr[</ branch />]][31],
                                         realligned_instr[branch_instr_ptr[</ branch />]][7],
                                         realligned_instr[branch_instr_ptr[</ branch />]][30:25],
                                         realligned_instr[branch_instr_ptr[</ branch />]][11:8]};
+assign branch_imm     [</ branch />] = {{19{branch_imm_base[</ branch/>][11]}}, branch_imm_base[</ branch/>], 1'b0};
+
 <$ end $>
 
 // jal
@@ -385,13 +391,16 @@ assign jal_imm_base = {realligned_instr[jump_instr_ptr][31],
                        realligned_instr[jump_instr_ptr][19:12],
                        realligned_instr[jump_instr_ptr][20],
                        realligned_instr[jump_instr_ptr][30:21]};
+assign jal_imm      = {{11{jal_imm_base[11]}}, jal_imm_base, 1'b0};
 
 // jalr
 assign jalr_imm_base = realligned_instr[jump_instr_ptr][31:20];
+assign jalr_imm      = {{20{jalr_imm_base[11]}}, jalr_imm_base};
 
 // jump
-assign jump_imm_base = is_jal_vec[jump_instr_ptr] ? JUMP_IMM_BASE_WIDTH'(jal_imm_base)
-                                                  : JUMP_IMM_BASE_WIDTH'(jalr_imm_base);
+// select final imm for jump, select from jal and jalr
+assign jump_imm = is_jal_vec[jump_instr_ptr] ? jal_imm
+                                             : jalr_imm;
 
 
 ////////////////////////////////// PROGRESSION CONTROL //////////////////////////////////
@@ -521,13 +530,13 @@ end
 assign dec_jump_pc_imm_en = is_jump_v;
 
 assign dec_jump_instr_pc_next = instr_pc[jump_instr_ptr];
-assign dec_jump_imm_base_next = jump_imm_base;
+assign dec_jump_imm_next      = jump_imm;
 assign dec_jump_ptr_next      = jump_instr_ptr;
 
 always_ff @(posedge clk_i) begin
   if (dec_jump_pc_imm_en) begin
     dec_jump_instr_pc_ff <= dec_jump_instr_pc_next;
-    dec_jump_imm_base_ff <= dec_jump_imm_base_next;
+    dec_jump_imm_ff      <= dec_jump_imm_next;
     dec_jump_ptr_ff      <= dec_jump_ptr_next;
   end
 end
@@ -538,7 +547,7 @@ assign dec_branch_pc_imm_en = is_branch_v;
 
 <$ for branch in range(bp_ways_num): $>
 assign dec_branch_instr_pc_next[</ branch />] = instr_pc[branch_instr_ptr[</ branch />]];
-assign dec_branch_imm_base_next[</ branch />] = branch_imm_base [</ branch />];
+assign dec_branch_imm_next     [</ branch />] = branch_imm[</ branch />];
 assign dec_branch_ptr_next     [</ branch />] = branch_instr_ptr[</ branch />];
 
 <$ end $>
@@ -547,8 +556,8 @@ assign dec_branch_ptr_next     [</ branch />] = branch_instr_ptr[</ branch />];
 always_ff @(posedge clk_i) begin
   if (dec_branch_pc_imm_en[</ way />]) begin
     dec_branch_instr_pc_ff[</ way />] <= dec_branch_instr_pc_next[</ way />];
-    dec_branch_imm_base_ff[</ way />] <= dec_branch_imm_base_next[</ way />];
-    dec_branch_ptr_ff     [</ way />] <= dec_branch_ptr_next     [</ way />];
+    dec_branch_imm_ff     [</ way />] <= dec_branch_imm_next[</ way />];
+    dec_branch_ptr_ff     [</ way />] <= dec_branch_ptr_next[</ way />];
   end
 end
 
@@ -588,8 +597,8 @@ assign dec_window_pc_o        = dec_window_pc_ff;
 assign dec_jump_instr_pc_o    = dec_jump_instr_pc_ff;
 assign dec_branch_instr_pc_o  = dec_branch_instr_pc_ff;
 
-assign dec_jump_imm_base_o    = dec_jump_imm_base_ff;
-assign dec_branch_imm_base_o  = dec_branch_imm_base_ff;
+assign dec_jump_imm_o         = dec_jump_imm_ff;
+assign dec_branch_imm_o       = dec_branch_imm_ff;
 
 assign dec_jal_v_o            = dec_jal_v_ff;
 assign dec_jalr_v_o           = dec_jalr_v_ff;
