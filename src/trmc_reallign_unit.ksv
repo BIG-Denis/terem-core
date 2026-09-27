@@ -33,14 +33,12 @@ import </ module_id />_pkg::*;
   output logic [BP_WAYS_NUM - 1:0]         bp_predict_v_o,
   output logic [BP_HASH_BITS_NUM - 1:0]    bp_predict_hash_o     [0:BP_WAYS_NUM - 1],
 
-  // RAS (Return Address Stack)
-  input  logic [PC_WIDTH - 1:0]            ras_return_pc_i,
-
   // ROB (Reorder Buffer)
   input  logic [PC_WIDTH - 1:0]            rob_goto_pc_i,
 
   // DEC (Decoder)
   input  logic                             dec_goto_ras_v_i,
+  input  logic [PC_WIDTH - 1:0]            dec_ras_pc_i,
   input  logic                             dec_goto_v_i,
   input  logic [PC_WIDTH - 1:0]            dec_pc_i,
 
@@ -53,7 +51,7 @@ import </ module_id />_pkg::*;
   output logic [PC_WIDTH - 1:0]            dec_branch_instr_pc_o [0:BP_WAYS_NUM - 1],
 
   output logic [DATA_WIDTH - 1:0]          dec_jump_imm_o,
-  output logic [DATA_WIDTH - 1:0]          dec_branch_imm_o [0:BP_WAYS_NUM - 1],
+  output logic [DATA_WIDTH - 1:0]          dec_branch_imm_o      [0:BP_WAYS_NUM - 1],
 
   output logic                             dec_jal_v_o,
   output logic                             dec_jalr_v_o,
@@ -245,7 +243,7 @@ assign base_pc_next = // goto restored PC from ROB when flush
                       // goto calculated PC from decode stage (jump or RAS push)
                     : dec_goto_v_i     ? dec_pc_i
                       // goto RAS top (RAS pop)
-                    : dec_goto_ras_v_i ? ras_return_pc_i
+                    : dec_goto_ras_v_i ? dec_ras_pc_i
                       // increment PC for read instruction
                     : base_pc_ff + PC_WIDTH'(base_pc_incr);
 
@@ -374,7 +372,8 @@ end
 assign branch_pc_hash[</ branch />] = instr_pc[branch_instr_ptr[</ branch />]][BP_HASH_BIT_MSB - 1:BP_HASH_BIT_LSB];
 <$ end $>
 
-// extract IMM for branch and jump
+
+/////////////////////////////////// EXTRACT IMMEDIATES //////////////////////////////////
 
 <$ for branch in range(bp_ways_num): $>
 // branch </ branch />
@@ -677,13 +676,6 @@ assert property (@(posedge clk_i) disable iff (!rstn_i)
 <$   end $>
 
 
-// RAS (Return Address Stack)
-
-assert property (@(posedge clk_i) disable iff (!rstn_i)
-  dec_goto_ras_v_i |-> !$isunknown(ras_return_pc_i))
-  else $error("ras_return_pc_i must be known when dec_goto_ras_v_i is high!");
-
-
 // DEC (Decoder)
 
 assert property (@(posedge clk_i) disable iff (!rstn_i)
@@ -693,6 +685,10 @@ assert property (@(posedge clk_i) disable iff (!rstn_i)
 assert property (@(posedge clk_i) disable iff (!rstn_i)
   !$isunknown(dec_goto_v_i))
   else $error("dec_goto_v_i must be known!");
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  dec_goto_ras_v_i |-> !$isunknown(dec_ras_pc_i))
+  else $error("dec_ras_pc_i must be known when dec_goto_ras_v_i is high!");
 
 assert property (@(posedge clk_i) disable iff (!rstn_i)
   dec_goto_v_i |-> !$isunknown(dec_pc_i))
