@@ -73,7 +73,6 @@ dec_ctrls_t                            dec_ctrls;
 arch_regs_t                            arch_regs;
 
 logic                                  blocking_instr;
-
 logic                                  illegal_instr;
 
 
