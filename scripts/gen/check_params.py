@@ -20,7 +20,6 @@ def check_params_common(parameters):
     assert len(parameters['module_id']) > 1, "module_id must be longer than 1!"
     assert parameters['module_id'][0] != '_', "module_id must not start with underscore!"
     assert parameters['module_id'][0] not in set([str(i) for i in range(10)]), "module_id must not start with number!"
-
     # assertions
     assert type(parameters['assertions']), "assertions must be boolean!"
 
@@ -37,4 +36,5 @@ def check_params_branch_predictor(parameters):
     assert type(parameters['bp_pc_hash_bits']) == int, "bp_pc_hash_bits must be integer!"
     assert parameters['bp_pc_hash_bits'] > 1, "bp_pc_hash_bits must be greater than 1!"
     assert parameters['bp_pc_hash_bits'] < 9, "bp_pc_hash_bits must not be greater than 30!"
+    # bp_ways_num
     assert parameters['bp_ways_num'] < parameters['pipeline_width'], "bp_ways_num must be less than pipeline_width!"
