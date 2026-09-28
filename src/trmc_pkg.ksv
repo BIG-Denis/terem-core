@@ -26,6 +26,7 @@ localparam int unsigned PIPELINE_WIDTH        = </ pipeline_width />;
 
 // Branch Predictor
 localparam int unsigned BP_WAYS_NUM           = </ bp_ways_num />;
+localparam int unsigned BP_WAY_PTR_WIDTH      = $clog2(</ max(1, bp_ways_num) />);
 localparam int unsigned BP_HASH_BITS_NUM      = </ bp_pc_hash_bits />;
 
 // Instruction Queue
