@@ -37,10 +37,8 @@ import </ module_id />_pkg::*;
   input  logic [PC_WIDTH - 1:0]            rob_goto_pc_i,
 
   // DEC (Decoder)
-  input  logic                             dec_goto_ras_v_i,
-  input  logic [PC_WIDTH - 1:0]            dec_ras_pc_i,
   input  logic                             dec_goto_v_i,
-  input  logic [PC_WIDTH - 1:0]            dec_pc_i,
+  input  logic [PC_WIDTH - 1:0]            dec_goto_pc_i,
 
   output logic [WAYS_NUM - 1:0]            dec_raw_instr_v_o,
   output logic [LONG_INSTR_WIDTH - 1:0]    dec_raw_instr_o       [0:WAYS_NUM - 1],
@@ -239,16 +237,14 @@ assign base_pc_incr =
 // program counter
 
 assign base_pc_next = // goto restored PC from ROB when flush
-                      flush_i          ? rob_goto_pc_i
-                      // goto calculated PC from decode stage (jump or RAS push)
-                    : dec_goto_v_i     ? dec_pc_i
-                      // goto RAS top (RAS pop)
-                    : dec_goto_ras_v_i ? dec_ras_pc_i
+                      flush_i      ? rob_goto_pc_i
+                      // goto calculated PC from decode stage (any jump)
+                    : dec_goto_v_i ? dec_goto_pc_i
                       // increment PC for read instruction
                     : base_pc_ff + PC_WIDTH'(base_pc_incr);
 
 assign base_pc_en = // goto some PC
-                    dec_goto_v_i | dec_goto_ras_v_i | flush_i |
+                    dec_goto_v_i | flush_i |
                     // new instructions (PC increment)
                     iq_instr_pack_v_i & ~stall_i;
 
@@ -679,20 +675,12 @@ assert property (@(posedge clk_i) disable iff (!rstn_i)
 // DEC (Decoder)
 
 assert property (@(posedge clk_i) disable iff (!rstn_i)
-  !$isunknown(dec_goto_ras_v_i))
-  else $error("dec_goto_ras_v_i must be known!");
-
-assert property (@(posedge clk_i) disable iff (!rstn_i)
   !$isunknown(dec_goto_v_i))
   else $error("dec_goto_v_i must be known!");
 
 assert property (@(posedge clk_i) disable iff (!rstn_i)
-  dec_goto_ras_v_i |-> !$isunknown(dec_ras_pc_i))
-  else $error("dec_ras_pc_i must be known when dec_goto_ras_v_i is high!");
-
-assert property (@(posedge clk_i) disable iff (!rstn_i)
-  dec_goto_v_i |-> !$isunknown(dec_pc_i))
-  else $error("dec_pc_i must be known when dec_goto_v_i is high!");
+  dec_goto_v_i |-> !$isunknown(dec_goto_pc_i))
+  else $error("dec_goto_pc_i must be known when dec_goto_v_i is high!");
 
 assert property (@(posedge clk_i) disable iff (!rstn_i)
   !$isunknown(dec_raw_instr_v_o))
