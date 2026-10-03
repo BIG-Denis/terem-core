@@ -1,0 +1,16 @@
+`verilator_config
+
+
+// PKG (Package)
+
+// Remove warning for unused things in package  // TODO: remove after first release, use only while development
+lint_off -rule UNUSEDPARAM -file "*/</ module_id />_pkg.sv"
+
+
+// RAU (Reallign Unit)
+
+// Function fill_vec_until_ptr_incl_f always set zero bit to one
+lint_off -rule UNSIGNED -file "*/</ module_id />_reallign_unit.sv" -match "*Comparison is constant due to unsigned arithmetic*"
+
+// Pseudo-unoptimizable signal - next instruction selection depends on previous (long or compressed)
+lint_off -rule UNOPTFLAT -file "*/</ module_id />_reallign_unit.sv" -match "*Circular combinational logic: '</ module_id />_reallign_unit.is_long_instr'*"
