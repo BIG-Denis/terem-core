@@ -686,6 +686,54 @@ assert property (@(posedge clk_i) disable iff (!rstn_i)
   !$isunknown(dec_raw_instr_v_o))
   else $error("dec_raw_instr_v_o must be known!");
 
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  stall_i |=> $stable(dec_raw_instr_v_o))
+  else $error("dec_raw_instr_v_o must remain stable while stall_i is high!");
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  stall_i |=> $stable(dec_raw_instr_o))
+  else $error("dec_raw_instr_o must remain stable while stall_i is high!");
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  stall_i |=> $stable(dec_window_pc_o))
+  else $error("dec_window_pc_o must remain stable while stall_i is high!");
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  stall_i |=> $stable(dec_jump_instr_pc_o))
+  else $error("dec_jump_instr_pc_o must remain stable while stall_i is high!");
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  stall_i |=> $stable(dec_branch_instr_pc_o))
+  else $error("dec_branch_instr_pc_o must remain stable while stall_i is high!");
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  stall_i |=> $stable(dec_jump_imm_o))
+  else $error("dec_jump_imm_o must remain stable while stall_i is high!");
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  stall_i |=> $stable(dec_branch_imm_o))
+  else $error("dec_branch_imm_o must remain stable while stall_i is high!");
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  stall_i |=> $stable(dec_jal_v_o))
+  else $error("dec_jal_v_o must remain stable while stall_i is high!");
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  stall_i |=> $stable(dec_jalr_v_o))
+  else $error("dec_jalr_v_o must remain stable while stall_i is high!");
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  stall_i |=> $stable(dec_jump_ptr_o))
+  else $error("dec_jump_ptr_o must remain stable while stall_i is high!");
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  stall_i |=> $stable(dec_branch_v_o))
+  else $error("dec_branch_v_o must remain stable while stall_i is high!");
+
+assert property (@(posedge clk_i) disable iff (!rstn_i)
+  stall_i |=> $stable(dec_branch_ptr_o))
+  else $error("dec_branch_ptr_o must remain stable while stall_i is high!");
+
 
 // Internal signals
 
