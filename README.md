@@ -15,6 +15,8 @@ Check out full description and detailed overview of Terem CORE abilities at [spe
 * 10 stage pipeline
 * configurable fetch/decode/issue/commit width
 * configurable ROB entries count
+* configurable Branch Predictor
+* configurable RAS
 
 And this is not the end!
 
