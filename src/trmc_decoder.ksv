@@ -209,7 +209,7 @@ assign target_pc_branch[</ branch />] = rau_branch_instr_pc_i[</ branch />] + ra
 
 // find first taken branch
 
-// idx stands for index inside range BP_WAYS_NUM
+// idx stands for index inside range BP_WAYS_NUM (branch predictor ways)
 // ptr stands for pointer inside range WAYS_NUM (decoder ways)
 always_comb begin
   priority case (1'b1)

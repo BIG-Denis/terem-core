@@ -94,7 +94,7 @@ assign imm_i                   = {{20{imm_i_base[11]}}, imm_i_base};
 assign imm_s                   = {{20{imm_s_base[11]}}, imm_s_base};
 assign imm_b                   = {{19{imm_b_base[11]}}, imm_b_base, 1'b0};
 assign imm_u                   = {imm_u_base, 12'b0};
-assign imm_j                   = {{11{imm_j_base[11]}}, imm_j_base, 1'b0};
+assign imm_j                   = {{11{imm_j_base[19]}}, imm_j_base, 1'b0};
 assign shamt                   = {27'b0, shamt_base};
 
 assign func3                   = instr_i[14:12];
